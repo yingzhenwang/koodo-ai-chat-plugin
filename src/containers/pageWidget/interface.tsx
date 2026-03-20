@@ -1,0 +1,22 @@
+import BookModel from "../../models/Book";
+import HtmlBookModel from "../../models/HtmlBook";
+export interface BackgroundProps {
+  currentBook: BookModel;
+  currentChapter: string;
+  readerMode: string;
+  currentChapterIndex: number;
+  isNavLocked: boolean;
+  isSettingLocked: boolean;
+  htmlBook: HtmlBookModel;
+  isShowBookmark: boolean;
+  isHideFooter: boolean;
+  isHideHeader: boolean;
+  backgroundColor: string;
+  handleCurrentChapter: (currentChapter: string) => void;
+  handleCurrentChapterIndex: (currentChapterIndex: number) => void;
+}
+export interface BackgroundState {
+  isSingle: boolean;
+  prevPage: number;
+  nextPage: number;
+}

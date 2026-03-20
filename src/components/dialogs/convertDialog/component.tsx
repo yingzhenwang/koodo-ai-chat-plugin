@@ -1,0 +1,382 @@
+import React from "react";
+import { Trans } from "react-i18next";
+import { ConvertDialogProps, ConvertDialogState } from "./interface";
+import { isElectron } from "react-device-detect";
+import "./convertDialog.css";
+import { ConfigService } from "../../../assets/lib/kookit-extra-browser.min";
+import BookUtil from "../../../utils/file/bookUtil";
+import {
+  getOcrPaddleLangList,
+  ocrTesseractLangList,
+  paraSpacingList,
+  titleSizeList,
+} from "../../../constants/dropdownList";
+import toast from "react-hot-toast";
+
+class ConvertDialog extends React.Component<
+  ConvertDialogProps,
+  ConvertDialogState
+> {
+  constructor(props: ConvertDialogProps) {
+    super(props);
+    this.state = {
+      isShowExportAll: false,
+      isConvertPDF: ConfigService.getReaderConfig("isConvertPDF") === "yes",
+    };
+  }
+  renderSwitchOption = (optionList: any[]) => {
+    return optionList.map((item) => {
+      return (
+        <div
+          style={item.isElectron ? (isElectron ? {} : { display: "none" }) : {}}
+          key={item.propName}
+        >
+          <div
+            className="setting-dialog-new-title"
+            key={item.title}
+            style={{ marginLeft: 10, width: "calc(100% - 20px)" }}
+          >
+            <span style={{ width: "calc(100% - 50px)" }}>
+              <Trans>{item.title}</Trans>
+            </span>
+
+            <span
+              className="single-control-switch"
+              onClick={() => {
+                this.setState({
+                  [item.propName]: !this.state[item.propName],
+                } as any);
+                ConfigService.setReaderConfig(
+                  item.propName,
+                  this.state[item.propName] ? "no" : "yes"
+                );
+                BookUtil.reloadBooks(this.props.currentBook);
+              }}
+              style={this.state[item.propName] ? {} : { opacity: 0.6 }}
+            >
+              <span
+                className="single-control-button"
+                style={
+                  this.state[item.propName]
+                    ? {
+                        transform: "translateX(20px)",
+                        transition: "transform 0.5s ease",
+                      }
+                    : {
+                        transform: "translateX(0px)",
+                        transition: "transform 0.5s ease",
+                      }
+                }
+              ></span>
+            </span>
+          </div>
+          <p className="setting-option-subtitle">
+            <Trans>{item.desc}</Trans>
+          </p>
+        </div>
+      );
+    });
+  };
+  render() {
+    return (
+      <>
+        <div
+          className="sort-dialog-container"
+          onMouseLeave={() => {
+            this.props.handleConvertDialog(false);
+          }}
+          onMouseEnter={() => {
+            this.props.handleConvertDialog(true);
+          }}
+          style={{ right: "20px", left: "auto", top: "50px", width: "240px" }}
+        >
+          <ul className="sort-by-category">
+            {this.renderSwitchOption([
+              {
+                isElectron: false,
+                title: "Convert PDF to Text",
+                desc: "",
+                propName: "isConvertPDF",
+              },
+            ])}
+            {this.props.currentBook.description.indexOf("scanned") > -1 ? (
+              <>
+                <div
+                  className="setting-dialog-new-title"
+                  style={{
+                    marginLeft: 10,
+                    width: "calc(100% - 20px)",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                  }}
+                >
+                  <Trans>OCR engine</Trans>
+
+                  <select
+                    name=""
+                    className="lang-setting-dropdown"
+                    onChange={(event) => {
+                      if (
+                        event.target.value === "official-ai-ocr" &&
+                        !this.props.isAuthed
+                      ) {
+                        toast(
+                          this.props.t(
+                            "This feature is not available in the free version"
+                          )
+                        );
+                        return;
+                      }
+                      ConfigService.setReaderConfig(
+                        "ocrEngine",
+                        event.target.value
+                      );
+                      if (event.target.value === "tesseract") {
+                        ConfigService.setReaderConfig(
+                          "ocrLang",
+                          ocrTesseractLangList.find(
+                            (item) =>
+                              item.lang ===
+                              ConfigService.getReaderConfig("lang")
+                          )?.value || "chi_sim"
+                        );
+                      } else if (event.target.value === "paddle") {
+                        ConfigService.setReaderConfig(
+                          "ocrLang",
+                          "standard_v5_mobile"
+                        );
+                      }
+                      if (
+                        ConfigService.getReaderConfig("isConvertPDF") === "yes"
+                      ) {
+                        BookUtil.reloadBooks(this.props.currentBook);
+                      }
+                    }}
+                  >
+                    {[
+                      { label: "Please select", value: "", lang: "" },
+                      {
+                        label: this.props.t("Official AI OCR") + " (Pro)",
+                        value: "official-ai-ocr",
+                        lang: "",
+                      },
+                      {
+                        label: "Paddle OCR",
+                        value: "paddle",
+                        lang: "standard_v5_mobile",
+                      },
+                      {
+                        label: "Tesseract",
+                        value: "tesseract",
+                        lang: "chi_sim",
+                      },
+                    ].map((item) => (
+                      <option
+                        value={item.value}
+                        key={item.value}
+                        className="lang-setting-option"
+                        selected={
+                          ConfigService.getReaderConfig("ocrEngine")
+                            ? item.value ===
+                              ConfigService.getReaderConfig("ocrEngine")
+                            : item.value === "paddle"
+                              ? true
+                              : false
+                        }
+                      >
+                        {this.props.t(item.label)}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div
+                  className="setting-dialog-new-title"
+                  style={{
+                    marginLeft: 10,
+                    width: "calc(100% - 20px)",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                  }}
+                >
+                  <Trans>Set OCR language</Trans>
+
+                  <select
+                    name=""
+                    className="lang-setting-dropdown"
+                    style={{ width: "70px" }}
+                    onChange={(event) => {
+                      ConfigService.setReaderConfig(
+                        "ocrLang",
+                        event.target.value
+                      );
+                      if (
+                        ConfigService.getReaderConfig("isConvertPDF") === "yes"
+                      ) {
+                        BookUtil.reloadBooks(this.props.currentBook);
+                      }
+                    }}
+                  >
+                    {[
+                      { label: "Please select", value: "", lang: "" },
+                      ...(ConfigService.getReaderConfig("ocrEngine") ===
+                      "tesseract"
+                        ? ocrTesseractLangList
+                        : ConfigService.getReaderConfig("ocrEngine") ===
+                            "official-ai-ocr"
+                          ? [{ label: "General", value: "general", lang: "" }]
+                          : getOcrPaddleLangList()),
+                    ].map((item) => (
+                      <option
+                        value={item.value}
+                        key={item.value}
+                        className="lang-setting-option"
+                        selected={
+                          ConfigService.getReaderConfig("ocrLang")
+                            ? item.value ===
+                              ConfigService.getReaderConfig("ocrLang")
+                            : item.lang ===
+                                ConfigService.getReaderConfig("lang")
+                              ? true
+                              : false
+                        }
+                      >
+                        {this.props.t(item.label)}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </>
+            ) : (
+              <>
+                <div>
+                  <div
+                    className="setting-dialog-new-title"
+                    style={{
+                      marginLeft: 10,
+                      width: "calc(100% - 20px)",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                    }}
+                  >
+                    <Trans>Paragraph spacing threshold</Trans>
+                    <select
+                      name=""
+                      className="lang-setting-dropdown"
+                      style={{ width: "70px" }}
+                      onChange={(event) => {
+                        ConfigService.setReaderConfig(
+                          "paraSpacingValue",
+                          event.target.value
+                        );
+                        if (
+                          ConfigService.getReaderConfig("isConvertPDF") ===
+                          "yes"
+                        ) {
+                          BookUtil.reloadBooks(this.props.currentBook);
+                        }
+                      }}
+                    >
+                      {[
+                        { label: "Please select", value: "" },
+                        ...paraSpacingList,
+                      ].map((item) => (
+                        <option
+                          value={item.value}
+                          key={item.value}
+                          className="lang-setting-option"
+                          selected={
+                            ConfigService.getReaderConfig("paraSpacingValue")
+                              ? item.value ===
+                                ConfigService.getReaderConfig(
+                                  "paraSpacingValue"
+                                )
+                              : item.value === "1.5"
+                          }
+                        >
+                          {this.props.t(item.label)}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <p
+                    className="setting-option-subtitle"
+                    style={{ margin: 10, marginTop: 5 }}
+                  >
+                    <Trans>
+                      When the spacing between two lines of text is n times of
+                      regular spacing, they will be split into two paragraphs
+                    </Trans>
+                  </p>
+                </div>
+                <div>
+                  <div
+                    className="setting-dialog-new-title"
+                    style={{
+                      marginLeft: 10,
+                      width: "calc(100% - 20px)",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                    }}
+                  >
+                    <Trans>Title size threshold</Trans>
+                    <select
+                      name=""
+                      className="lang-setting-dropdown"
+                      style={{ width: "70px" }}
+                      onChange={(event) => {
+                        ConfigService.setReaderConfig(
+                          "titleSizeValue",
+                          event.target.value
+                        );
+                        if (
+                          ConfigService.getReaderConfig("isConvertPDF") ===
+                          "yes"
+                        ) {
+                          BookUtil.reloadBooks(this.props.currentBook);
+                        }
+                      }}
+                    >
+                      {[
+                        { label: "Please select", value: "" },
+                        ...titleSizeList,
+                      ].map((item) => (
+                        <option
+                          value={item.value}
+                          key={item.value}
+                          className="lang-setting-option"
+                          selected={
+                            ConfigService.getReaderConfig("titleSizeValue")
+                              ? item.value ===
+                                ConfigService.getReaderConfig("titleSizeValue")
+                              : item.value === "1.2"
+                          }
+                        >
+                          {this.props.t(item.label)}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <p
+                    className="setting-option-subtitle"
+                    style={{ margin: 10, marginTop: 5 }}
+                  >
+                    <Trans>
+                      When a line of text is n times the size of regular text,
+                      it will be treated as a title
+                    </Trans>
+                  </p>
+                </div>
+              </>
+            )}
+          </ul>
+        </div>
+      </>
+    );
+  }
+}
+
+export default ConvertDialog;

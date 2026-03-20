@@ -1,0 +1,1087 @@
+const {
+  app,
+  BrowserWindow,
+  WebContentsView,
+  Menu,
+  ipcMain,
+  dialog,
+  powerSaveBlocker,
+  nativeTheme,
+  protocol,
+  screen,
+} = require("electron");
+const path = require("path");
+const isDev = require("electron-is-dev");
+const Store = require("electron-store");
+const log = require("electron-log/main");
+const os = require("os");
+const store = new Store();
+const fs = require("fs");
+const configDir = app.getPath("userData");
+const dirPath = path.join(configDir, "uploads");
+const packageJson = require("./package.json");
+let mainWin;
+let readerWindow;
+let readerWindowList = [];
+let dictWindow;
+let transWindow;
+let linkWindow;
+let mainView;
+//multi tab
+// let mainViewList = []
+let chatWindow;
+let dbConnection = {};
+let syncUtilCache = {};
+let pickerUtilCache = {};
+let downloadRequest = null;
+const singleInstance = app.requestSingleInstanceLock();
+var filePath = null;
+if (process.platform != "darwin" && process.argv.length >= 2) {
+  filePath = process.argv[1];
+}
+log.transports.file.fileName = "debug.log";
+log.transports.file.maxSize = 1024 * 1024; // 1MB
+log.initialize();
+store.set("appVersion", packageJson.version);
+store.set("appPlatform", os.platform() + " " + os.release());
+const mainWinDisplayScale = store.get("mainWinDisplayScale") || 1;
+let options = {
+  width: parseInt(store.get("mainWinWidth") || 1050) / mainWinDisplayScale,
+  height: parseInt(store.get("mainWinHeight") || 660) / mainWinDisplayScale,
+  x: parseInt(store.get("mainWinX")),
+  y: parseInt(store.get("mainWinY")),
+  backgroundColor: "#fff",
+  minWidth: 400,
+  minHeight: 300,
+  webPreferences: {
+    webSecurity: false,
+    nodeIntegration: true,
+    contextIsolation: false,
+    nativeWindowOpen: true,
+    nodeIntegrationInSubFrames: false,
+    allowRunningInsecureContent: false,
+    enableRemoteModule: true,
+    sandbox: false,
+  },
+};
+const Database = require("better-sqlite3");
+if (os.platform() === "linux") {
+  options = Object.assign({}, options, {
+    icon: path.join(__dirname, "./build/assets/icon.png"),
+  });
+}
+// Single Instance Lock
+if (!singleInstance) {
+  app.quit();
+} else {
+  app.on("second-instance", (event, argv, workingDir) => {
+    if (mainWin) {
+      if (!mainWin.isVisible()) mainWin.show();
+      mainWin.focus();
+    }
+  });
+}
+if (filePath && fs.existsSync(filePath) && fs.statSync(filePath).isFile()) {
+  // Make sure the directory exists
+  if (!fs.existsSync(dirPath)) {
+    fs.mkdirSync(dirPath, { recursive: true });
+  }
+  fs.writeFileSync(
+    path.join(dirPath, "log.json"),
+    JSON.stringify({ filePath }),
+    "utf-8"
+  );
+}
+const getDBConnection = (dbName, storagePath, sqlStatement) => {
+  if (!dbConnection[dbName]) {
+    if (!fs.existsSync(path.join(storagePath, "config"))) {
+      fs.mkdirSync(path.join(storagePath, "config"), { recursive: true });
+    }
+    dbConnection[dbName] = new Database(
+      path.join(storagePath, "config", `${dbName}.db`),
+      {}
+    );
+    dbConnection[dbName].pragma("journal_mode = WAL");
+    dbConnection[dbName].exec(sqlStatement["createTableStatement"][dbName]);
+  }
+  return dbConnection[dbName];
+};
+const getSyncUtil = async (config, isUseCache = true) => {
+  if (!isUseCache || !syncUtilCache[config.service]) {
+    const { SyncUtil } = await import("./src/assets/lib/kookit-extra.min.mjs");
+    syncUtilCache[config.service] = new SyncUtil(config.service, config);
+  }
+  return syncUtilCache[config.service];
+};
+const removeSyncUtil = (config) => {
+  delete syncUtilCache[config.service];
+};
+const getPickerUtil = async (config, isUseCache = true) => {
+  if (!isUseCache || !pickerUtilCache[config.service]) {
+    const { SyncUtil } = await import("./src/assets/lib/kookit-extra.min.mjs");
+    pickerUtilCache[config.service] = new SyncUtil(config.service, config);
+  }
+  return pickerUtilCache[config.service];
+};
+const removePickerUtil = (config) => {
+  if (pickerUtilCache[config.service]) {
+    pickerUtilCache[config.service] = null;
+  }
+};
+// Simple encryption function
+const encrypt = (text, key) => {
+  let result = "";
+  for (let i = 0; i < text.length; i++) {
+    const charCode = text.charCodeAt(i) ^ key.charCodeAt(i % key.length);
+    result += String.fromCharCode(charCode);
+  }
+  return Buffer.from(result).toString("base64");
+};
+
+// Simple decryption function
+const decrypt = (encryptedText, key) => {
+  const buff = Buffer.from(encryptedText, "base64").toString();
+  let result = "";
+  for (let i = 0; i < buff.length; i++) {
+    const charCode = buff.charCodeAt(i) ^ key.charCodeAt(i % key.length);
+    result += String.fromCharCode(charCode);
+  }
+  return result;
+};
+// Helper to check if two rectangles intersect (for partial visibility)
+const rectanglesIntersect = (rect1, rect2) => {
+  return !(
+    rect1.x + rect1.width <= rect2.x ||
+    rect1.y + rect1.height <= rect2.y ||
+    rect1.x >= rect2.x + rect2.width ||
+    rect1.y >= rect2.y + rect2.height
+  );
+};
+
+// Check if the window is at least partially visible on any display
+const isWindowPartiallyVisible = (bounds) => {
+  const displays = screen.getAllDisplays();
+  for (const display of displays) {
+    if (rectanglesIntersect(bounds, display.workArea)) {
+      return true;
+    }
+  }
+  return false;
+};
+const createMainWin = () => {
+  const isMainWindVisible = isWindowPartiallyVisible({
+    width: parseInt(store.get("mainWinWidth") || 1050) / mainWinDisplayScale,
+    height: parseInt(store.get("mainWinHeight") || 660) / mainWinDisplayScale,
+    x: parseInt(store.get("mainWinX")),
+    y: parseInt(store.get("mainWinY")),
+  });
+  if (!isMainWindVisible) {
+    delete options.x;
+    delete options.y;
+  }
+  mainWin = new BrowserWindow(options);
+  if (store.get("isAlwaysOnTop") === "yes") {
+    mainWin.setAlwaysOnTop(true);
+  }
+  if (store.get("isAutoMaximizeWin") === "yes") {
+    mainWin.maximize();
+  }
+
+  if (!isDev) {
+    Menu.setApplicationMenu(null);
+  }
+
+  const urlLocation = isDev
+    ? "http://localhost:3000"
+    : `file://${path.join(__dirname, "./build/index.html")}`;
+  mainWin.loadURL(urlLocation);
+  mainWin.on("close", () => {
+    if (mainWin && !mainWin.isDestroyed()) {
+      let bounds = mainWin.getBounds();
+      const currentDisplay = screen.getDisplayMatching(bounds);
+      const primaryDisplay = screen.getPrimaryDisplay();
+      if (bounds.width > 0 && bounds.height > 0) {
+        store.set({
+          mainWinWidth: bounds.width,
+          mainWinHeight: bounds.height,
+          mainWinX: mainWin.isMaximized() ? 0 : bounds.x,
+          mainWinY: mainWin.isMaximized() ? 0 : bounds.y,
+          mainWinDisplayScale:
+            currentDisplay.scaleFactor / primaryDisplay.scaleFactor,
+        });
+      }
+    }
+    mainWin = null;
+  });
+  mainWin.on("resize", () => {
+    if (mainView) {
+      if (!mainWin) return;
+      let { width, height } = mainWin.getContentBounds();
+      mainView.setBounds({ x: 0, y: 0, width: width, height: height });
+    }
+  });
+  mainWin.on("maximize", () => {
+    if (mainView) {
+      let { width, height } = mainWin.getContentBounds();
+      mainView.setBounds({ x: 0, y: 0, width: width, height: height });
+    }
+  });
+  mainWin.on("unmaximize", () => {
+    if (mainView) {
+      let { width, height } = mainWin.getContentBounds();
+      mainView.setBounds({ x: 0, y: 0, width: width, height: height });
+    }
+  });
+  mainWin.webContents.on(
+    "console-message",
+    (event, level, message, line, sourceId) => {
+      console.log(`[Renderer Console] Message: ${message}`);
+    }
+  );
+  //cancel-download-app
+  ipcMain.handle("cancel-download-app", (event, arg) => {
+    // Implement cancellation logic here
+    // Note: In this example, we are not keeping a reference to the request,
+    // so we cannot actually abort it. This is a placeholder for demonstration.
+    if (downloadRequest) {
+      downloadRequest.abort();
+      downloadRequest = null;
+    }
+    event.returnValue = "cancelled";
+  });
+  ipcMain.handle("update-win-app", (event, config) => {
+    let fileName = `koodo-reader-installer.exe`;
+    let supportedArchs = ["x64", "ia32", "arm64"];
+    //get system arch
+    let arch = os.arch();
+    if (!supportedArchs.includes(arch)) {
+      return;
+    }
+
+    let url = `https://dl.koodoreader.com/v${config.version}/Koodo-Reader-${config.version}-${arch}.exe`;
+    const https = require("https");
+    const { spawn } = require("child_process");
+    const file = fs.createWriteStream(path.join(app.getPath("temp"), fileName));
+    downloadRequest = https.get(url, (res) => {
+      const totalSize = parseInt(res.headers["content-length"], 10);
+      let downloadedSize = 0;
+      res.on("data", (chunk) => {
+        downloadedSize += chunk.length;
+        const progress = ((downloadedSize / totalSize) * 100).toFixed(2);
+        const downloadedMB = (downloadedSize / 1024 / 1024).toFixed(2);
+        const totalMB = (totalSize / 1024 / 1024).toFixed(2);
+        mainWin.webContents.send("download-app-progress", {
+          progress,
+          downloadedMB,
+          totalMB,
+        });
+      });
+
+      res.pipe(file);
+      file.on("finish", () => {
+        console.log("\n下载完成！");
+        file.close();
+
+        let updateExePath = path.join(app.getPath("temp"), fileName);
+        if (!fs.existsSync(updateExePath)) {
+          console.error("更新包不存在:", updateExePath);
+          return;
+        }
+        // 验证文件可执行性
+        try {
+          fs.accessSync(updateExePath, fs.constants.X_OK);
+          console.info("更新包可执行性验证通过");
+        } catch (err) {
+          console.error("更新包不可执行:", err.message);
+          return;
+        }
+        try {
+          // 使用 spawn 执行非静默安装
+          const child = spawn(updateExePath, [], {
+            stdio: ["ignore", "pipe", "pipe"], // 捕获 stdout 和 stderr 以便调试
+            detached: true, // 独立进程
+            shell: true, // 确保 UAC 提示
+            windowsHide: false, // 确保窗口可见
+          });
+
+          setTimeout(() => {
+            app.quit();
+          }, 1000);
+          child.unref();
+        } catch (err) {
+          console.error(`spawn 执行异常: ${err.message}`);
+        }
+      });
+    });
+  });
+  ipcMain.handle("open-book", (event, config) => {
+    let { url, isMergeWord, isAutoFullscreen, isAutoMaximize, isPreventSleep } =
+      config;
+    options.webPreferences.nodeIntegrationInSubFrames = true;
+    if (isMergeWord) {
+      delete options.backgroundColor;
+    }
+    store.set({
+      url,
+      isMergeWord: isMergeWord || "no",
+      isAutoFullscreen: isAutoFullscreen || "no",
+      isAutoMaximize: isAutoMaximize || "no",
+      isPreventSleep: isPreventSleep || "no",
+    });
+    let id;
+    if (isPreventSleep === "yes") {
+      id = powerSaveBlocker.start("prevent-display-sleep");
+      console.log(powerSaveBlocker.isStarted(id));
+    }
+    if (readerWindow) {
+      readerWindowList.push(readerWindow);
+    }
+    if (isAutoFullscreen === "yes" || isAutoMaximize === "yes") {
+      readerWindow = new BrowserWindow(options);
+      readerWindow.loadURL(url);
+      if (isAutoFullscreen === "yes") {
+        readerWindow.setFullScreen(true);
+      } else if (isAutoMaximize === "yes") {
+        readerWindow.maximize();
+      }
+    } else {
+      const scaleRatio = store.get("windowDisplayScale") || 1;
+      const isWindowVisible = isWindowPartiallyVisible({
+        x: parseInt(store.get("windowX")),
+        y: parseInt(store.get("windowY")),
+        width: parseInt(store.get("windowWidth") || 1050) / scaleRatio,
+        height: parseInt(store.get("windowHeight") || 660) / scaleRatio,
+      });
+      readerWindow = new BrowserWindow({
+        ...options,
+        width: parseInt(store.get("windowWidth") || 1050) / scaleRatio,
+        height: parseInt(store.get("windowHeight") || 660) / scaleRatio,
+        x: isWindowVisible ? parseInt(store.get("windowX")) : undefined,
+        y: isWindowVisible ? parseInt(store.get("windowY")) : undefined,
+        frame: isMergeWord === "yes" ? false : true,
+        hasShadow: isMergeWord === "yes" ? false : true,
+        transparent: isMergeWord === "yes" ? true : false,
+      });
+      readerWindow.loadURL(url);
+      // readerWindow.webContents.openDevTools();
+    }
+    if (store.get("isAlwaysOnTop") === "yes") {
+      readerWindow.setAlwaysOnTop(true);
+    }
+    readerWindow.on("close", (event) => {
+      if (readerWindow && !readerWindow.isDestroyed()) {
+        let bounds = readerWindow.getBounds();
+        const currentDisplay = screen.getDisplayMatching(bounds);
+        const primaryDisplay = screen.getPrimaryDisplay();
+        if (bounds.width > 0 && bounds.height > 0) {
+          store.set({
+            windowWidth: bounds.width,
+            windowHeight: bounds.height,
+            windowX:
+              readerWindow.isMaximized() &&
+              currentDisplay.id === primaryDisplay.id
+                ? 0
+                : bounds.x,
+            windowY:
+              readerWindow.isMaximized() &&
+              currentDisplay.id === primaryDisplay.id
+                ? 0
+                : bounds.y < 0
+                  ? 0
+                  : bounds.y,
+            windowDisplayScale:
+              currentDisplay.scaleFactor / primaryDisplay.scaleFactor,
+          });
+        }
+      }
+      if (isPreventSleep && !readerWindow.isDestroyed()) {
+        id && powerSaveBlocker.stop(id);
+      }
+      if (mainWin && !mainWin.isDestroyed()) {
+        mainWin.webContents.send("reading-finished", {});
+      }
+    });
+
+    event.returnValue = "success";
+  });
+  ipcMain.handle("generate-tts", async (event, voiceConfig) => {
+    let { text, speed, plugin, config } = voiceConfig;
+    let voiceFunc = plugin.script;
+    // eslint-disable-next-line no-eval
+    eval(voiceFunc);
+    return global.getAudioPath(text, speed, dirPath, config);
+  });
+  ipcMain.handle("cloud-upload", async (event, config) => {
+    let syncUtil = await getSyncUtil(config, config.isUseCache);
+    let result = await syncUtil.uploadFile(
+      config.fileName,
+      config.fileName,
+      config.type
+    );
+    return result;
+  });
+
+  ipcMain.handle("cloud-download", async (event, config) => {
+    let syncUtil = await getSyncUtil(config);
+    let result = await syncUtil.downloadFile(
+      config.fileName,
+      (config.isTemp ? "temp-" : "") + config.fileName,
+      config.type
+    );
+    return result;
+  });
+  ipcMain.handle("cloud-progress", async (event, config) => {
+    let syncUtil = await getSyncUtil(config);
+    let result = syncUtil.getDownloadedSize();
+    return result;
+  });
+  ipcMain.handle("picker-download", async (event, config) => {
+    let pickerUtil = await getPickerUtil(config);
+    let result = await pickerUtil.remote.downloadFile(
+      config.sourcePath,
+      config.destPath
+    );
+    return result;
+  });
+  ipcMain.handle("picker-progress", async (event, config) => {
+    let pickerUtil = await getPickerUtil(config);
+    let result = await pickerUtil.getDownloadedSize();
+    return result;
+  });
+  ipcMain.handle("cloud-reset", async (event, config) => {
+    let syncUtil = await getSyncUtil(config);
+    let result = syncUtil.resetCounters();
+    return result;
+  });
+  ipcMain.handle("cloud-stats", async (event, config) => {
+    let syncUtil = await getSyncUtil(config);
+    let result = syncUtil.getStats();
+    return result;
+  });
+  ipcMain.handle("cloud-delete", async (event, config) => {
+    try {
+      let syncUtil = await getSyncUtil(config, config.isUseCache);
+      let result = await syncUtil.deleteFile(config.fileName, config.type);
+      return result;
+    } catch (error) {
+      console.error("Error deleting file:", error);
+    }
+    return false;
+  });
+
+  ipcMain.handle("cloud-list", async (event, config) => {
+    let syncUtil = await getSyncUtil(config);
+    let result = await syncUtil.listFiles(config.type);
+    return result;
+  });
+  ipcMain.handle("picker-list", async (event, config) => {
+    let pickerUtil = await getPickerUtil(config);
+    let result = await pickerUtil.listFileInfos(config.currentPath);
+    return result;
+  });
+  ipcMain.handle("cloud-exist", async (event, config) => {
+    let syncUtil = await getSyncUtil(config);
+    let result = await syncUtil.isExist(config.fileName, config.type);
+    return result;
+  });
+  ipcMain.handle("cloud-close", async (event, config) => {
+    removeSyncUtil(config);
+    return "pong";
+  });
+
+  ipcMain.handle("clear-tts", async (event, config) => {
+    if (!fs.existsSync(path.join(dirPath, "tts"))) {
+      return "pong";
+    } else {
+      const fsExtra = require("fs-extra");
+      try {
+        await fsExtra.remove(path.join(dirPath, "tts"));
+        await fsExtra.mkdir(path.join(dirPath, "tts"));
+        return "pong";
+      } catch (err) {
+        console.error(err);
+        return "pong";
+      }
+    }
+  });
+  ipcMain.handle("select-path", async (event) => {
+    var path = await dialog.showOpenDialog({
+      properties: ["openDirectory"],
+    });
+    return path.filePaths[0];
+  });
+  ipcMain.handle("encrypt-data", async (event, config) => {
+    const { TokenService } =
+      await import("./src/assets/lib/kookit-extra.min.mjs");
+    let fingerprint = await TokenService.getFingerprint();
+    let encrypted = encrypt(config.token, fingerprint);
+    store.set("encryptedToken", encrypted);
+    return "pong";
+  });
+  ipcMain.handle("decrypt-data", async (event) => {
+    let encrypted = store.get("encryptedToken");
+    if (!encrypted) return "";
+    const { TokenService } =
+      await import("./src/assets/lib/kookit-extra.min.mjs");
+    let fingerprint = await TokenService.getFingerprint();
+    let decrypted = decrypt(encrypted, fingerprint);
+    if (decrypted.startsWith("{") && decrypted.endsWith("}")) {
+      return decrypted;
+    } else {
+      try {
+        const { safeStorage } = require("electron");
+        decrypted = safeStorage.decryptString(Buffer.from(encrypted, "base64"));
+        let newEncrypted = encrypt(decrypted, fingerprint);
+        store.set("encryptedToken", newEncrypted);
+        return decrypted;
+      } catch (error) {
+        console.error("Decryption failed:", error);
+        return "{}";
+      }
+    }
+  });
+  ipcMain.handle("get-mac", async (event, config) => {
+    const { machineIdSync } = require("node-machine-id");
+    return machineIdSync();
+  });
+  ipcMain.handle("get-store-value", async (event, config) => {
+    return store.get(config.key);
+  });
+
+  ipcMain.handle("reset-reader-position", async (event) => {
+    store.delete("windowX");
+    store.delete("windowY");
+    return "success";
+  });
+  ipcMain.handle("reset-main-position", async (event) => {
+    store.delete("mainWinX");
+    store.delete("mainWinY");
+    app.relaunch();
+    app.exit();
+    return "success";
+  });
+
+  ipcMain.handle("select-file", async (event, config) => {
+    const result = await dialog.showOpenDialog({
+      properties: ["openFile"],
+      filters: [{ name: "Zip Files", extensions: ["zip"] }],
+    });
+
+    if (result.canceled) {
+      return "";
+    } else {
+      const filePath = result.filePaths[0];
+      return filePath;
+    }
+  });
+
+  ipcMain.handle("select-book", async (event, config) => {
+    const result = await dialog.showOpenDialog({
+      properties: ["openFile", "multiSelections"],
+      filters: [
+        {
+          name: "Books",
+          extensions: [
+            "epub",
+            "pdf",
+            "txt",
+            "mobi",
+            "azw3",
+            "azw",
+            "htm",
+            "html",
+            "xml",
+            "xhtml",
+            "mhtml",
+            "docx",
+            "md",
+            "fb2",
+            "cbz",
+            "cbt",
+            "cbr",
+            "cb7",
+          ],
+        },
+      ],
+    });
+
+    if (result.canceled) {
+      console.log("User canceled the file selection");
+      return [];
+    } else {
+      const filePaths = result.filePaths;
+      console.log("Selected file path:", filePaths);
+      return filePaths;
+    }
+  });
+  ipcMain.handle("custom-database-command", async (event, config) => {
+    const { SqlStatement } =
+      await import("./src/assets/lib/kookit-extra.min.mjs");
+    let { query, storagePath, data, dbName, executeType } = config;
+    let db = getDBConnection(dbName, storagePath, SqlStatement.sqlStatement);
+    const row = db.prepare(query);
+    let result;
+    if (data && data.length > 0) {
+      result = row[executeType](...data);
+    } else {
+      result = row[executeType]();
+    }
+    return result;
+  });
+  ipcMain.handle("database-command", async (event, config) => {
+    const { SqlStatement } =
+      await import("./src/assets/lib/kookit-extra.min.mjs");
+    let { statement, statementType, executeType, dbName, data, storagePath } =
+      config;
+    let db = getDBConnection(dbName, storagePath, SqlStatement.sqlStatement);
+    let sql = "";
+    if (statementType === "string") {
+      sql = SqlStatement.sqlStatement[statement][dbName];
+    } else if (statementType === "function") {
+      sql = SqlStatement.sqlStatement[statement][dbName](data);
+    }
+    const row = db.prepare(sql);
+    let result;
+    if (data) {
+      if (statement.startsWith("save") || statement.startsWith("update")) {
+        data = SqlStatement.jsonToSqlite[dbName](data);
+      }
+      result = row[executeType](data);
+    } else {
+      result = row[executeType]();
+    }
+    if (executeType === "all") {
+      return result.map((item) => SqlStatement.sqliteToJson[dbName](item));
+    } else if (executeType === "get") {
+      return SqlStatement.sqliteToJson[dbName](result);
+    } else {
+      return result;
+    }
+  });
+  ipcMain.handle("close-database", async (event, config) => {
+    const { SqlStatement } =
+      await import("./src/assets/lib/kookit-extra.min.mjs");
+    let { dbName, storagePath } = config;
+    let db = getDBConnection(dbName, storagePath, SqlStatement.sqlStatement);
+    delete dbConnection[dbName];
+    db.close();
+  });
+  ipcMain.handle("set-always-on-top", async (event, config) => {
+    store.set("isAlwaysOnTop", config.isAlwaysOnTop);
+    if (mainWin && !mainWin.isDestroyed()) {
+      if (config.isAlwaysOnTop === "yes") {
+        mainWin.setAlwaysOnTop(true);
+      } else {
+        mainWin.setAlwaysOnTop(false);
+      }
+    }
+    if (readerWindow && !readerWindow.isDestroyed()) {
+      if (config.isAlwaysOnTop === "yes") {
+        readerWindow.setAlwaysOnTop(true);
+      } else {
+        readerWindow.setAlwaysOnTop(false);
+      }
+    }
+    return "pong";
+  });
+  ipcMain.handle("set-auto-maximize", async (event, config) => {
+    store.set("isAutoMaximizeWin", config.isAutoMaximizeWin);
+    if (mainWin && !mainWin.isDestroyed()) {
+      if (config.isAutoMaximizeWin === "yes") {
+        mainWin.maximize();
+      } else {
+        mainWin.unmaximize();
+      }
+    }
+    if (readerWindow && !readerWindow.isDestroyed()) {
+      if (config.isAlwaysOnTop === "yes") {
+        readerWindow.setAlwaysOnTop(true);
+      } else {
+        readerWindow.setAlwaysOnTop(false);
+      }
+    }
+    return "pong";
+  });
+  ipcMain.handle("toggle-auto-launch", async (event, config) => {
+    app.setLoginItemSettings({
+      openAtLogin: config.isAutoLaunch === "yes",
+    });
+    return "pong";
+  });
+  ipcMain.handle("open-explorer-folder", async (event, config) => {
+    const { shell } = require("electron");
+    if (config.isFolder) {
+      shell.openPath(config.path);
+    } else {
+      shell.showItemInFolder(config.path);
+    }
+
+    return "pong";
+  });
+  ipcMain.handle("get-debug-logs", async (event, config) => {
+    const { shell } = require("electron");
+    const file = log.transports.file.getFile();
+    shell.showItemInFolder(file.path);
+    return "pong";
+  });
+
+  ipcMain.on("user-data", (event, arg) => {
+    event.returnValue = dirPath;
+  });
+  ipcMain.handle("hide-reader", (event, arg) => {
+    if (
+      readerWindow &&
+      !readerWindow.isDestroyed() &&
+      readerWindow.isFocused()
+    ) {
+      readerWindow.minimize();
+      event.returnvalue = true;
+    } else if (mainWin && mainWin.isFocused()) {
+      mainWin.minimize();
+      event.returnvalue = true;
+    } else {
+      event.returnvalue = false;
+    }
+  });
+  ipcMain.handle("open-console", (event, arg) => {
+    mainWin.webContents.openDevTools();
+    event.returnvalue = true;
+  });
+  ipcMain.handle("reload-reader", (event, arg) => {
+    if (readerWindowList.length > 0) {
+      readerWindowList.forEach((win) => {
+        if (
+          win &&
+          !win.isDestroyed() &&
+          win.webContents.getURL().indexOf(arg.bookKey) > -1
+        ) {
+          win.reload();
+        }
+      });
+    }
+    if (
+      readerWindow &&
+      !readerWindow.isDestroyed() &&
+      readerWindow.webContents.getURL().indexOf(arg.bookKey) > -1
+    ) {
+      readerWindow.reload();
+    }
+  });
+  ipcMain.handle("reload-main", (event, arg) => {
+    if (mainWin) {
+      mainWin.reload();
+    }
+  });
+
+  ipcMain.handle("new-chat", (event, config) => {
+    if (!chatWindow && mainWin) {
+      let bounds = mainWin.getBounds();
+      chatWindow = new BrowserWindow({
+        ...options,
+        width: 450,
+        height: bounds.height,
+        x: bounds.x + (bounds.width - 450),
+        y: bounds.y,
+        frame: true,
+        hasShadow: true,
+        transparent: false,
+      });
+      chatWindow.loadURL(config.url);
+      chatWindow.on("close", (event) => {
+        chatWindow && chatWindow.destroy();
+        chatWindow = null;
+      });
+    } else if (chatWindow && !chatWindow.isDestroyed()) {
+      chatWindow.show();
+      chatWindow.focus();
+    }
+  });
+  ipcMain.handle("clear-all-data", (event, config) => {
+    store.clear();
+  });
+  ipcMain.handle("new-tab", (event, config) => {
+    if (mainWin) {
+      mainView = new WebContentsView(options);
+      mainWin.contentView.addChildView(mainView);
+      let { width, height } = mainWin.getContentBounds();
+      mainView.setBounds({ x: 0, y: 0, width: width, height: height });
+      mainView.webContents.loadURL(config.url);
+    }
+  });
+  ipcMain.handle("reload-tab", (event, config) => {
+    if (mainWin && mainView) {
+      mainView.webContents.reload();
+    }
+  });
+  ipcMain.handle("adjust-tab-size", (event, config) => {
+    if (mainWin && mainView) {
+      let { width, height } = mainWin.getContentBounds();
+      mainView.setBounds({ x: 0, y: 0, width: width, height: height });
+    }
+  });
+  ipcMain.handle("exit-tab", (event, message) => {
+    if (mainWin && mainView) {
+      mainWin.contentView.removeChildView(mainView);
+    }
+  });
+  ipcMain.handle("enter-tab-fullscreen", () => {
+    if (mainWin && mainView) {
+      mainWin.setFullScreen(true);
+      console.log("enter full");
+    }
+  });
+  ipcMain.handle("exit-tab-fullscreen", () => {
+    if (mainWin && mainView) {
+      mainWin.setFullScreen(false);
+      console.log("exit full");
+    }
+  });
+  ipcMain.handle("enter-fullscreen", () => {
+    if (readerWindow) {
+      readerWindow.setFullScreen(true);
+      console.log("enter full");
+    }
+  });
+  ipcMain.handle("exit-fullscreen", () => {
+    if (readerWindow) {
+      readerWindow.setFullScreen(false);
+      console.log("exit full");
+    }
+  });
+  ipcMain.handle("open-url", (event, config) => {
+    if (config.type === "dict") {
+      if (!dictWindow || dictWindow.isDestroyed()) {
+        dictWindow = new BrowserWindow();
+      }
+      dictWindow.loadURL(config.url);
+      dictWindow.focus();
+    } else if (config.type === "trans") {
+      if (!transWindow || transWindow.isDestroyed()) {
+        transWindow = new BrowserWindow();
+      }
+      transWindow.loadURL(config.url);
+      transWindow.focus();
+    } else {
+      if (!linkWindow || linkWindow.isDestroyed()) {
+        linkWindow = new BrowserWindow();
+      }
+      linkWindow.loadURL(config.url);
+      linkWindow.focus();
+    }
+
+    event.returnvalue = true;
+  });
+  ipcMain.handle("switch-moyu", (event, arg) => {
+    let id;
+    if (store.get("isPreventSleep") === "yes") {
+      id = powerSaveBlocker.start("prevent-display-sleep");
+      console.log(powerSaveBlocker.isStarted(id));
+    }
+    if (readerWindow) {
+      readerWindow.close();
+      if (store.get("isMergeWord") === "yes") {
+        delete options.backgroundColor;
+      }
+      const scaleRatio = store.get("windowDisplayScale") || 1;
+      Object.assign(options, {
+        width: parseInt(store.get("windowWidth") || 1050) / scaleRatio,
+        height: parseInt(store.get("windowHeight") || 660) / scaleRatio,
+        x: parseInt(store.get("windowX")),
+        y: parseInt(store.get("windowY")),
+        frame: store.get("isMergeWord") !== "yes" ? false : true,
+        hasShadow: store.get("isMergeWord") !== "yes" ? false : true,
+        transparent: store.get("isMergeWord") !== "yes" ? true : false,
+      });
+      options.webPreferences.nodeIntegrationInSubFrames = true;
+
+      store.set(
+        "isMergeWord",
+        store.get("isMergeWord") !== "yes" ? "yes" : "no"
+      );
+      if (readerWindow) {
+        readerWindowList.push(readerWindow);
+      }
+      readerWindow = new BrowserWindow(options);
+      if (store.get("isAlwaysOnTop") === "yes") {
+        readerWindow.setAlwaysOnTop(true);
+      }
+
+      readerWindow.loadURL(store.get("url"));
+      readerWindow.on("close", (event) => {
+        if (!readerWindow.isDestroyed()) {
+          let bounds = readerWindow.getBounds();
+          const currentDisplay = screen.getDisplayMatching(bounds);
+          const primaryDisplay = screen.getPrimaryDisplay();
+          if (bounds.width > 0 && bounds.height > 0) {
+            store.set({
+              windowWidth: bounds.width,
+              windowHeight: bounds.height,
+              windowX:
+                readerWindow.isMaximized() &&
+                currentDisplay.id === primaryDisplay.id
+                  ? 0
+                  : bounds.x,
+              windowY:
+                readerWindow.isMaximized() &&
+                currentDisplay.id === primaryDisplay.id
+                  ? 0
+                  : bounds.y < 0
+                    ? 0
+                    : bounds.y,
+            });
+          }
+        }
+        if (store.get("isPreventSleep") && !readerWindow.isDestroyed()) {
+          id && powerSaveBlocker.stop(id);
+        }
+        if (mainWin && !mainWin.isDestroyed()) {
+          mainWin.webContents.send("reading-finished", {});
+        }
+      });
+    }
+    event.returnvalue = false;
+  });
+  ipcMain.on("storage-location", (event, config) => {
+    event.returnValue = path.join(dirPath, "data");
+  });
+  ipcMain.on("url-window-status", (event, config) => {
+    if (config.type === "dict") {
+      event.returnValue =
+        dictWindow && !dictWindow.isDestroyed() ? true : false;
+    } else if (config.type === "trans") {
+      event.returnValue =
+        transWindow && !transWindow.isDestroyed() ? true : false;
+    } else {
+      event.returnValue =
+        linkWindow && !linkWindow.isDestroyed() ? true : false;
+    }
+  });
+  ipcMain.on("get-dirname", (event, arg) => {
+    event.returnValue = __dirname;
+  });
+  ipcMain.on("system-color", (event, arg) => {
+    event.returnValue = nativeTheme.shouldUseDarkColors || false;
+  });
+  ipcMain.on("check-main-open", (event, arg) => {
+    event.returnValue = mainWin ? true : false;
+  });
+  ipcMain.on("get-file-data", function (event) {
+    if (fs.existsSync(path.join(dirPath, "log.json"))) {
+      try {
+        const _data = JSON.parse(
+          fs.readFileSync(path.join(dirPath, "log.json"), "utf-8") || "{}"
+        );
+        if (_data && _data.filePath) {
+          filePath = _data.filePath;
+          setTimeout(() => {
+            fs.writeFileSync(path.join(dirPath, "log.json"), "{}", "utf-8");
+          }, 1000);
+        }
+      } catch (error) {
+        console.error("Error reading log.json:", error);
+      }
+    }
+
+    event.returnValue = filePath;
+    filePath = null;
+  });
+  ipcMain.on("check-file-data", function (event) {
+    if (fs.existsSync(path.join(dirPath, "log.json"))) {
+      try {
+        const _data = JSON.parse(
+          fs.readFileSync(path.join(dirPath, "log.json"), "utf-8") || "{}"
+        );
+        if (_data && _data.filePath) {
+          filePath = _data.filePath;
+        }
+      } catch (error) {
+        console.error("Error reading log.json:", error);
+      }
+    }
+
+    event.returnValue = filePath;
+    filePath = null;
+  });
+};
+
+app.on("ready", () => {
+  createMainWin();
+});
+app.on("window-all-closed", () => {
+  app.quit();
+});
+app.on("open-file", (e, pathToFile) => {
+  filePath = pathToFile;
+});
+// Register protocol handler
+app.setAsDefaultProtocolClient("koodo-reader");
+// Handle deep linking
+app.on("second-instance", (event, commandLine) => {
+  const url = commandLine.pop();
+  if (url) {
+    handleCallback(url);
+  }
+});
+const serializeArg = (arg) => {
+  if (arg === null) return "null";
+  if (arg === undefined) return "undefined";
+  if (typeof arg === "object") {
+    try {
+      return JSON.stringify(arg);
+    } catch {
+      return String(arg);
+    }
+  }
+  return String(arg);
+};
+const originalConsoleLog = console.log;
+console.log = function (...args) {
+  originalConsoleLog(...args); // 保留原日志
+  log.info(args.map(serializeArg).join(" ")); // 写入日志文件
+};
+const originalConsoleError = console.error;
+console.error = function (...args) {
+  originalConsoleError(...args); // 保留原错误日志
+  log.error(args.map(serializeArg).join(" ")); // 写入错误日志文件
+};
+const originalConsoleWarn = console.warn;
+console.warn = function (...args) {
+  originalConsoleWarn(...args); // 保留原警告日志
+  log.warn(args.map(serializeArg).join(" ")); // 写入警告日志文件
+};
+const originalConsoleInfo = console.info;
+console.info = function (...args) {
+  originalConsoleInfo(...args); // 保留原信息日志
+  log.info(args.map(serializeArg).join(" ")); // 写入信息日志文件
+};
+// Handle MacOS deep linking
+app.on("open-url", (event, url) => {
+  event.preventDefault();
+  handleCallback(url);
+});
+const handleCallback = (url) => {
+  try {
+    // 检查 URL 是否有效
+    if (!url.startsWith("koodo-reader://")) {
+      console.error("Invalid URL format:", url);
+      return;
+    }
+
+    // 解析 URL
+    const parsedUrl = new URL(url);
+    const code = parsedUrl.searchParams.get("code");
+    const state = parsedUrl.searchParams.get("state");
+    const pickerData = parsedUrl.searchParams.get("pickerData");
+
+    if (code && mainWin) {
+      mainWin.webContents.send("oauth-callback", { code, state });
+    }
+    if (pickerData && mainWin) {
+      let config = JSON.parse(decodeURIComponent(pickerData));
+      mainWin.webContents.send("picker-finished", config);
+    }
+  } catch (error) {
+    console.error("Error handling callback URL:", error);
+    console.log("Problematic URL:", url);
+  }
+};

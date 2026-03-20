@@ -1,0 +1,1273 @@
+﻿import Plugin from "../models/Plugin";
+import { isElectron } from "react-device-detect";
+import SparkMD5 from "spark-md5";
+import {
+  BookHelper,
+  CommonTool,
+  ConfigService,
+  SyncUtil,
+  TokenService,
+} from "../assets/lib/kookit-extra-browser.min";
+import Book from "../models/Book";
+import BookUtil from "./file/bookUtil";
+import * as Kookit from "../assets/lib/kookit.min";
+import DatabaseService from "./storage/databaseService";
+import packageJson from "../../package.json";
+import toast from "react-hot-toast";
+import i18n from "../i18n";
+import {
+  encryptToken,
+  getCloudSyncToken,
+  refreshThirdToken,
+} from "./request/thirdparty";
+import {
+  getCloudConfig,
+  getCloudToken,
+  removeCloudConfig,
+} from "./file/common";
+import SyncService from "./storage/syncService";
+import localforage from "localforage";
+import { driveList } from "../constants/driveList";
+import { updateUserConfig } from "./request/user";
+declare var window: any;
+export const supportedFormats = [
+  ".epub",
+  ".pdf",
+  ".txt",
+  ".mobi",
+  ".azw3",
+  ".azw",
+  ".htm",
+  ".html",
+  ".xml",
+  ".xhtml",
+  ".mhtml",
+  ".docx",
+  ".md",
+  ".fb2",
+  ".cbz",
+  ".cbt",
+  ".cbr",
+  ".cb7",
+];
+export const calculateFileMD5 = (file: File): Promise<string> => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+
+    reader.onload = (event) => {
+      const arrayBuffer = event.target?.result as ArrayBuffer;
+      const md5Hash = SparkMD5.ArrayBuffer.hash(arrayBuffer);
+      resolve(md5Hash);
+    };
+
+    reader.onerror = (error) => {
+      reject(error);
+    };
+
+    reader.readAsArrayBuffer(file);
+  });
+};
+export const vexPromptAsync = (message, placeholder = "", value = "") => {
+  return new Promise((resolve) => {
+    window.vex.dialog.buttons.YES.text = i18n.t("Confirm");
+    window.vex.dialog.buttons.NO.text = i18n.t("Cancel");
+    window.vex.dialog.prompt({
+      message,
+      placeholder,
+      value,
+      callback: function (input) {
+        resolve(input);
+      },
+    });
+  });
+};
+export const vexComfirmAsync = (message, confirmText: string = "Confirm") => {
+  return new Promise((resolve) => {
+    window.vex.dialog.buttons.YES.text = i18n.t(confirmText);
+    window.vex.dialog.buttons.NO.text = i18n.t("Cancel");
+    window.vex.dialog.confirm({
+      unsafeMessage: i18n.t(message),
+      contentClassName: "custom-confirm-width",
+      callback: (value) => {
+        if (value) {
+          resolve(true);
+        } else {
+          resolve(false);
+        }
+      },
+    });
+  });
+};
+export const getFormatFromAudioPath = (audioPath: string) => {
+  let format = "mp3";
+  if (audioPath.indexOf(".wav") > -1) {
+    format = "wav";
+  } else if (audioPath.indexOf(".ogg") > -1) {
+    format = "ogg";
+  } else if (audioPath.indexOf(".flac") > -1) {
+    format = "flac";
+  } else if (audioPath.indexOf(".aac") > -1) {
+    format = "aac";
+  }
+  return format;
+};
+export const fetchFileFromPath = (filePath: string) => {
+  return new Promise<File>((resolve) => {
+    const fs = window.require("fs");
+
+    fs.readFile(filePath, (err, data) => {
+      if (err) {
+        console.error(err);
+        return;
+      }
+      const file = new File(
+        [data],
+        window.navigator.platform.indexOf("Win") > -1
+          ? filePath.split("\\").reverse()[0]
+          : filePath.split("/").reverse()[0],
+        {
+          lastModified: new Date().getTime(),
+        }
+      );
+      resolve(file);
+    });
+  });
+};
+
+export const sleep = (time: number) => {
+  return new Promise((resolve) => setTimeout(resolve, time));
+};
+
+export const scrollContents = (chapterTitle: string, chapterHref: string) => {
+  let contentBody = document.getElementsByClassName("navigation-body")[0];
+  if (!contentBody) return;
+  let contentList = contentBody.getElementsByClassName("book-content-name");
+  let targetContent = Array.from(contentList).filter((item) => {
+    item.setAttribute("style", "");
+    let dataHref = (item as any).getAttribute("data-href");
+    if (chapterHref) {
+      return item.textContent === chapterTitle && dataHref === chapterHref;
+    } else {
+      return item.textContent === chapterTitle;
+    }
+  });
+  if (targetContent.length > 0) {
+    contentBody.scrollTo({
+      left: 0,
+      top: (targetContent[0] as any).offsetTop,
+      behavior: "smooth",
+    });
+    targetContent[0].setAttribute("style", "color:red; font-weight: bold");
+  }
+};
+export const handleFullScreen = () => {
+  if (isElectron) {
+    if (ConfigService.getReaderConfig("isOpenInMain") === "yes") {
+      window
+        .require("electron")
+        .ipcRenderer.invoke("enter-tab-fullscreen", "ping");
+    } else {
+      window.require("electron").ipcRenderer.invoke("enter-fullscreen", "ping");
+    }
+  }
+};
+export const handleExitFullScreen = () => {
+  if (isElectron) {
+    if (ConfigService.getReaderConfig("isOpenInMain") === "yes") {
+      window
+        .require("electron")
+        .ipcRenderer.invoke("exit-tab-fullscreen", "ping");
+    } else {
+      window.require("electron").ipcRenderer.invoke("exit-fullscreen", "ping");
+    }
+  }
+};
+export const getQueryParams = (url: string) => {
+  const urlObj = new URL(url);
+  const params = new URLSearchParams(urlObj.search);
+  const queryParams = {};
+  for (let pair of params.entries()) {
+    queryParams[pair[0]] = pair[1];
+  }
+  return queryParams;
+};
+export const getStorageLocation = () => {
+  if (isElectron) {
+    return ConfigService.getItem("storageLocation")
+      ? ConfigService.getItem("storageLocation")
+      : window
+          .require("electron")
+          .ipcRenderer.sendSync("storage-location", "ping");
+  } else {
+    return ConfigService.getItem("storageLocation");
+  }
+};
+export const getAllVoices = (pluginList: Plugin[]) => {
+  let voiceList: any[] = [];
+  for (
+    let index = 0;
+    index < pluginList.filter((item) => item.type === "voice").length;
+    index++
+  ) {
+    const plugin = pluginList.filter((item) => item.type === "voice")[index];
+    voiceList.push(...(plugin.voiceList as any[]));
+  }
+  return voiceList;
+};
+export const checkPlugin = async (plugin: Plugin) => {
+  if (
+    (await CommonTool.generateSHA256Hash(plugin.script)) !== plugin.scriptSHA256
+  ) {
+    return false;
+  } else {
+    return true;
+  }
+};
+export const reloadManager = () => {
+  if (isElectron) {
+    window.require("electron").ipcRenderer.invoke("reload-main", "ping");
+  } else {
+    window.location.reload();
+  }
+};
+export const openExternalUrl = (
+  url: string,
+  isPlugin: boolean = false,
+  type: string = "link"
+) => {
+  isElectron
+    ? ConfigService.getReaderConfig("isUseBuiltIn") === "yes" || isPlugin
+      ? window.require("electron").ipcRenderer.invoke("open-url", { url, type })
+      : window.require("electron").shell.openExternal(url)
+    : window.open(url);
+};
+export const openInBrowser = (url: string) => {
+  isElectron
+    ? window.require("electron").shell.openExternal(url)
+    : window.open(url);
+};
+export const getPageWidth = (
+  readerMode: string,
+  scale: string,
+  margin: number,
+  isNavLocked: boolean,
+  isSettingLocked: boolean
+) => {
+  if (Math.abs(parseFloat(scale)) > 1.4) {
+    scale = "1.3";
+  }
+  const findValidMultiple = (limit: number) => {
+    let multiple = limit - (limit % 12);
+
+    while (multiple >= 0) {
+      if (((multiple - multiple / 12) / 2) % 2 === 0) {
+        return multiple;
+      }
+      multiple -= 12;
+    }
+
+    return limit;
+  };
+  if (
+    document.body.clientWidth * Math.abs(parseFloat(scale)) -
+      document.body.clientWidth * 0.4 >
+    document.body.clientWidth
+  ) {
+    let pageWidth = document.body.clientWidth - 106;
+    let pageOffset = 50 + "px";
+    return {
+      pageOffset,
+      pageWidth: pageWidth + "px",
+    };
+  }
+
+  let pageOffset = "";
+  let pageWidth = 0;
+  if (readerMode === "scroll" || readerMode === "single") {
+    let preWidth =
+      document.body.clientWidth * Math.abs(parseFloat(scale)) -
+      document.body.clientWidth * 0.4 -
+      (isNavLocked ? 300 : 0) -
+      (isSettingLocked ? 300 : 0);
+    let width = findValidMultiple(preWidth);
+    pageOffset = `calc(50vw + ${isNavLocked ? 150 : 0}px - ${
+      isSettingLocked ? 150 : 0
+    }px - ${width / 2}px)`;
+    pageWidth = width;
+  } else if (readerMode === "double") {
+    let width = findValidMultiple(
+      document.body.clientWidth -
+        2 * margin -
+        80 -
+        (isNavLocked ? 300 : 0) -
+        (isSettingLocked ? 300 : 0)
+    );
+    pageOffset = `calc(50vw + ${isNavLocked ? 150 : 0}px - ${
+      isSettingLocked ? 150 : 0
+    }px - ${width / 2}px)`;
+    pageWidth = width;
+  }
+  if (pageWidth > document.body.clientWidth) {
+    pageWidth = document.body.clientWidth - 106;
+    pageOffset = 50 + "px";
+  }
+  return {
+    pageOffset,
+    pageWidth: pageWidth + "px",
+  };
+};
+export const loadFontData = async () => {
+  try {
+    if (!window.queryLocalFonts) return [];
+    const availableFonts = await window.queryLocalFonts();
+    return availableFonts.map((font: any) => {
+      return {
+        label: font.fullName,
+        value: `"${font.fullName}", "${font.postscriptName}", "${font.family}"`,
+      };
+    });
+  } catch (error) {
+    console.error(error);
+  }
+};
+
+export function removeSearchParams() {
+  const url = new URL(window.location.href.split("?")[0]);
+  window.history.replaceState({}, document.title, url.toString());
+}
+export const getChatLocale = () => {
+  if (navigator.language.startsWith("zh")) {
+    return "zh_CN";
+  } else {
+    return "en";
+  }
+};
+export function addChatBox() {
+  const scriptContent = `
+    (function (d, t) {
+      var BASE_URL = "https://app.chatwoot.com";
+      var g = d.createElement(t),
+        s = d.getElementsByTagName(t)[0];
+      g.src = BASE_URL + "/packs/js/sdk.js";
+      g.defer = true;
+      g.async = true;
+      s.parentNode.insertBefore(g, s);
+      g.onload = function () {
+        window.chatwootSDK.run({
+          websiteToken: "svaD5wxfU5UY1r5ZzpMtLqv2",
+          baseUrl: BASE_URL,
+        });
+        window.addEventListener('chatwoot:ready', function() {
+          window.$chatwoot.setLocale('${getChatLocale()}');
+          window.$chatwoot.setCustomAttributes({
+            version: '${packageJson.version}',
+            client: 'web',
+          });
+        });
+      };
+    })(document, "script");
+  `;
+
+  const scriptElement = document.createElement("script");
+  scriptElement.type = "text/javascript";
+  scriptElement.text = scriptContent;
+  document.head.appendChild(scriptElement);
+}
+export function removeChatBox() {
+  const scriptElement = document.querySelector("script[src*='chatwoot']");
+  if (scriptElement) {
+    scriptElement.remove();
+  }
+}
+export const preCacheAllBooks = async (bookList: Book[]) => {
+  for (let index = 0; index < bookList.length; index++) {
+    const selectedBook = bookList[index];
+    if (selectedBook.format === "PDF") {
+      continue;
+    }
+    if (
+      await BookUtil.isBookExist(
+        "cache-" + selectedBook.key,
+        "zip",
+        selectedBook.path
+      )
+    ) {
+      continue;
+    }
+
+    let result: any = await BookUtil.fetchBook(
+      selectedBook.key,
+      selectedBook.format.toLowerCase(),
+      true,
+      selectedBook.path
+    );
+    let rendition = BookHelper.getRendition(
+      result,
+      {
+        format: selectedBook.format,
+        readerMode: "",
+        charset: selectedBook.charset,
+        animation:
+          ConfigService.getReaderConfig("isSliding") === "yes" ? "sliding" : "",
+        convertChinese: ConfigService.getReaderConfig("convertChinese"),
+        parserRegex: "",
+        isDarkMode: "no",
+        isMobile: "no",
+        password: getPdfPassword(selectedBook),
+        isScannedPDF:
+          selectedBook.description.indexOf("scanned") > -1 ? "yes" : "no",
+      },
+      Kookit
+    );
+    let cache = await rendition.preCache(result);
+    if (cache !== "err" || cache) {
+      await BookUtil.addBook("cache-" + selectedBook.key, "zip", cache);
+    }
+  }
+};
+export const generateSyncRecord = async () => {
+  ConfigService.setAllSyncRecord({});
+  for (let database of CommonTool.databaseList) {
+    let itemList = await DatabaseService.getAllRecords(database);
+    for (let item of itemList) {
+      ConfigService.setSyncRecord(
+        {
+          type: "database",
+          catergory: "sqlite",
+          name: database,
+          key: item.key,
+        },
+        { operation: "save", time: Date.now() }
+      );
+    }
+  }
+  for (let config of CommonTool.configList) {
+    if (
+      config === "themeColors" ||
+      config === "recentBooks" ||
+      config === "deletedBooks" ||
+      config === "favoriteBooks" ||
+      config === "noteTags"
+    ) {
+      if (ConfigService.getAllListConfig(config).length > 0) {
+        ConfigService.setSyncRecord(
+          {
+            type: "config",
+            catergory: "listConfig",
+            name: "general",
+            key: config,
+          },
+          {
+            operation: "update",
+            time: Date.now(),
+          }
+        );
+      }
+    }
+    if (config === "readingTime" || config === "recordLocation") {
+      let configItems: string[] = Object.keys(
+        ConfigService.getAllObjectConfig(config)
+      );
+      for (let index = 0; index < configItems.length; index++) {
+        let itemName = configItems[index];
+        ConfigService.setSyncRecord(
+          {
+            type: "config",
+            catergory: "objectConfig",
+            name: config,
+            key: itemName,
+          },
+          {
+            operation: "update",
+            time: Date.now(),
+          }
+        );
+      }
+    }
+    if (config === "shelfList") {
+      let itemMap = ConfigService.getAllMapConfig(config);
+      let itemNameList = Object.keys(itemMap);
+      for (let index = 0; index < itemNameList.length; index++) {
+        let itemName = itemNameList[index];
+        if (itemName === "New") continue;
+        ConfigService.setSyncRecord(
+          {
+            type: "config",
+            catergory: "mapConfig",
+            name: config,
+            key: itemName,
+          },
+          {
+            operation: "update",
+            time: Date.now(),
+          }
+        );
+      }
+    }
+  }
+};
+export const handleContextMenu = (id: string, isInput: boolean = false) => {
+  if (!isElectron) return;
+  const clipboard = window.require("electron").clipboard;
+  const text = clipboard.readText();
+  // fill the text into the box
+  if (!isInput) {
+    let textarea = document.getElementById(id) as HTMLTextAreaElement;
+    textarea.value = text;
+    textarea.textContent = text;
+    triggerReactChange(id, text);
+  } else {
+    document.getElementById(id)?.setAttribute("value", text);
+    triggerReactChange(id, text);
+  }
+};
+function triggerReactChange(id: string, value: string) {
+  const element: any = document.getElementById(id);
+  if (!element) return;
+
+  // 设置值
+  element.value = value;
+
+  // 创建合成事件对象
+  const syntheticEvent = {
+    target: {
+      id: id,
+      value: value,
+    },
+    currentTarget: {
+      value: value,
+    },
+    preventDefault: () => {},
+    stopPropagation: () => {},
+  };
+
+  // 获取 React 实例
+  const reactPropKey = Object.keys(element).find((key) =>
+    key.startsWith("__reactProps$")
+  );
+  const reactInstance = reactPropKey ? element[reactPropKey] : null;
+
+  // 调用 onChange 处理函数
+  if (reactInstance && reactInstance.onChange) {
+    reactInstance.onChange(syntheticEvent);
+  }
+}
+export const getDefaultTransTarget = (langList) => {
+  //reverse key and value
+  let langMap = {};
+  for (let key in langList) {
+    langMap[langList[key]] = key;
+  }
+  const langMap2 = {
+    zhCN: "Chinese",
+    zhTW: "Chinese",
+    zhMO: "Chinese",
+    ja: "Japanese",
+    uk: "Ukrainian",
+    ko: "Korean",
+    vi: "Vietnamese",
+    th: "Thai",
+    ru: "Russian",
+    ar: "Arabic",
+    fr: "French",
+    de: "German",
+    es: "Spanish",
+    it: "Italian",
+    pt: "Portuguese",
+    ptBR: "Portuguese",
+    nl: "Dutch",
+    id: "Indonesian",
+    tr: "Turkish",
+    pl: "Polish",
+    cs: "Czech",
+    sv: "Swedish",
+    bn: "Bengali",
+    tl: "Tagalog",
+    ga: "Irish",
+    bg: "Bulgarian",
+    fa: "Persian",
+  };
+  const lang = ConfigService.getReaderConfig("lang");
+  const langKeys = Object.keys(langMap);
+  let langTarget = langKeys.find((key) => key.includes(langMap2[lang]));
+  return langMap[langTarget || "English"];
+};
+export const WEBSITE_URL = "https://koodoreader.com";
+export const CN_WEBSITE_URL = "https://koodoreader.cn";
+export const getServerRegion = () => {
+  let isUseCN = false;
+  if (ConfigService.getItem("serverRegion")) {
+    isUseCN = ConfigService.getItem("serverRegion") === "china";
+  } else {
+    if (navigator.language && navigator.language === "zh-CN") {
+      isUseCN = true;
+    }
+  }
+  return isUseCN ? "china" : "global";
+};
+export const getWebsiteUrl = () => {
+  return getServerRegion() === "china" ? CN_WEBSITE_URL : WEBSITE_URL;
+};
+export const formatTimestamp = (timestamp) => {
+  if (!timestamp) return "";
+
+  const date = new Date(timestamp);
+  // return date.toLocaleDateString() + " " + date.toLocaleTimeString();
+  return date.toLocaleDateString();
+};
+export const checkMissingBook = async () => {
+  if (!isElectron) return;
+  var fs = window.require("fs");
+  var path = window.require("path");
+  let bookList = (await BookUtil.getBookList()) as Book[];
+  for (let index = 0; index < bookList.length; index++) {
+    const book = bookList[index];
+    let fileName = book.key + "." + book.format.toLowerCase();
+    let expectedPath = path.join(getStorageLocation() || "", `book`, fileName);
+    if (fs.existsSync(expectedPath)) {
+      continue;
+    }
+    // create folder if not exists
+    if (!fs.existsSync(path.join(getStorageLocation() || "", "book"))) {
+      fs.mkdirSync(path.join(getStorageLocation() || "", "book"), {
+        recursive: true,
+      });
+    }
+    if (book.path && fs.existsSync(book.path)) {
+      fs.copyFileSync(book.path, expectedPath);
+    }
+  }
+};
+export const deleteBrokenCovers = () => {
+  try {
+    if (!isElectron) return;
+    var fs = window.require("fs");
+    var path = window.require("path");
+    const storageLocation = getStorageLocation();
+    if (!storageLocation) return;
+    const dirPath = path.join(storageLocation, "cover");
+    const files = fs.readdirSync(dirPath);
+    for (const file of files) {
+      const filePath = path.join(dirPath, file);
+      try {
+        const stat = fs.statSync(filePath);
+        if (stat.size === 0) {
+          fs.unlinkSync(filePath);
+        }
+      } catch (e) {
+        console.error("Failed to check/delete file:", filePath, e);
+      }
+    }
+  } catch (error) {
+    console.error("Error while deleting broken books and covers:", error);
+  }
+};
+export const checkBrokenDatabase = async () => {
+  let localSyncRecords = ConfigService.getAllSyncRecord();
+  let localBooks = Object.keys(localSyncRecords).filter(
+    (item) =>
+      item.startsWith("database.sqlite.books") &&
+      localSyncRecords[item].operation !== "delete"
+  );
+  let actualbooks = await DatabaseService.getAllRecordKeys("books");
+  if (localBooks.length > 0 && actualbooks.length === 0) {
+    return true;
+  }
+  return false;
+};
+export const testConnection = async (driveName: string, driveConfig: any) => {
+  toast.loading(i18n.t("Testing connection..."), {
+    id: "testing-connection-id",
+  });
+  if (isElectron) {
+    const { ipcRenderer } = window.require("electron");
+    const fs = window.require("fs");
+    if (!fs.existsSync(getStorageLocation() + "/config")) {
+      fs.mkdirSync(getStorageLocation() + "/config", { recursive: true });
+    }
+    fs.writeFileSync(getStorageLocation() + "/config/test.txt", "Hello world!");
+    let result = await ipcRenderer.invoke("cloud-upload", {
+      ...driveConfig,
+      fileName: "test.txt",
+      service: driveName,
+      type: "config",
+      storagePath: getStorageLocation(),
+      isUseCache: false,
+    });
+    if (fs.existsSync(getStorageLocation() + "/config/test.txt")) {
+      fs.unlinkSync(getStorageLocation() + "/config/test.txt");
+    }
+    if (result) {
+      toast.success(i18n.t("Connection successful"), {
+        id: "testing-connection-id",
+      });
+      await ipcRenderer.invoke("cloud-delete", {
+        ...driveConfig,
+        fileName: "test.txt",
+        service: driveName,
+        type: "config",
+        storagePath: getStorageLocation(),
+        isUseCache: false,
+      });
+    } else {
+      toast.error(i18n.t("Connection failed"), {
+        id: "testing-connection-id",
+      });
+    }
+
+    return result;
+  } else {
+    let syncUtil = new SyncUtil(driveName, driveConfig);
+    // 上传到云端
+    let result = await syncUtil.uploadFile(
+      "test.txt",
+      "config",
+      new Blob(["Hello world!"])
+    );
+    if (!result) {
+      toast.error(i18n.t("Connection failed"), {
+        id: "testing-connection-id",
+      });
+      return false;
+    } else {
+      toast.success(i18n.t("Connection successful"), {
+        id: "testing-connection-id",
+      });
+    }
+
+    // 删除云端文件
+    return await syncUtil.deleteFile("test.txt", "config");
+  }
+};
+export const testCORS = async (url: string) => {
+  if (isElectron) return true;
+  if (window.location.href.startsWith("https://")) {
+    if (url.startsWith("http://")) {
+      toast.error(
+        i18n.t(
+          "This data source cannot be accessed due to browser's security policy. Please switch to another data source or HTTPS-based service provider."
+        ),
+        {
+          duration: 8000,
+        }
+      );
+      return false;
+    }
+  }
+  try {
+    const response = await fetch(url, {
+      method: "GET", // 或 'POST' 等
+      mode: "cors", // 明确指定跨域模式
+      headers: {
+        "Content-Type": "application/json", // 如果是POST，可添加
+      },
+      // body: JSON.stringify({ test: 'data' }) // 如果是POST
+    });
+    if (response.ok) {
+      const data = await response.text();
+      return true;
+    } else {
+      return true;
+    }
+  } catch (error) {
+    toast.error(
+      i18n.t(
+        "This data source cannot be accessed from browser due to CORS policy. Please switch to another data source or CORS-enabled service provider."
+      ) +
+        " " +
+        i18n.t("You can also use the desktop app to avoid this issue.")
+    );
+    console.error("CORS not supported:", error);
+    return false;
+  }
+};
+export const getPdfPassword = (book: Book) => {
+  if (book.format !== "PDF" || !book?.description) return "";
+  // 匹配形如 protected PDF: #password# 的内容
+  const match = book.description.match(/protected PDF: #(.+?)#/);
+  return match ? match[1] : "";
+};
+export const showDownloadProgress = (
+  service: string,
+  type: string,
+  bookSize: number
+) => {
+  if (bookSize === 0) {
+    return setTimeout(() => {
+      console.warn("Book size is 0, skipping download progress.");
+    }, 1000);
+  }
+  let isFirst = true;
+  let timer = setInterval(async () => {
+    let downloadedSize = 0;
+    if (isElectron) {
+      if (type === "cloud") {
+        let tokenConfig = await getCloudConfig(service);
+        let config = {
+          ...tokenConfig,
+          service: service,
+          storagePath: getStorageLocation(),
+        };
+        downloadedSize = await window
+          .require("electron")
+          .ipcRenderer.invoke("cloud-progress", config);
+      } else {
+        let tokenConfig = await getCloudConfig(service);
+        downloadedSize = await window
+          .require("electron")
+          .ipcRenderer.invoke("picker-progress", {
+            ...tokenConfig,
+            baseFolder: "",
+            service: service,
+            currentPath: "",
+            storagePath: getStorageLocation(),
+          });
+      }
+      if (isFirst && downloadedSize > 0) {
+        downloadedSize = 0;
+        isFirst = false;
+      }
+      let progress = downloadedSize / bookSize;
+      toast.loading(
+        i18n.t("Downloading") + " (" + parseInt(progress * 100 + "") + "%)",
+        {
+          id: "offline-book",
+        }
+      );
+    } else {
+      if (type === "cloud") {
+        let syncUtil = await SyncService.getSyncUtil();
+        downloadedSize = await syncUtil.getDownloadedSize();
+      } else {
+        let pickerUtil = await SyncService.getPickerUtil(service);
+        downloadedSize = await pickerUtil.getDownloadedSize();
+      }
+      if (isFirst && downloadedSize > 0) {
+        downloadedSize = 0;
+        isFirst = false;
+      }
+      let progress = downloadedSize / bookSize;
+      toast.loading(
+        i18n.t("Downloading") + " (" + parseInt(progress * 100 + "") + "%)",
+        {
+          id: "offline-book",
+        }
+      );
+    }
+  }, 500);
+  return timer;
+};
+export const showTaskProgress = async (
+  handleSyncStateChange: (isSync: boolean) => void
+) => {
+  let config = {};
+  let timer: any;
+  let service = ConfigService.getItem("defaultSyncOption");
+  if (!service) {
+    toast(i18n.t("Please add data source in the setting"));
+    return null;
+  }
+  if (isElectron) {
+    let tokenConfig = await getCloudConfig(service);
+    config = {
+      ...tokenConfig,
+      service: service,
+      storagePath: getStorageLocation(),
+    };
+    await window.require("electron").ipcRenderer.invoke("cloud-reset", config);
+  } else {
+    let syncUtil = await SyncService.getSyncUtil();
+    syncUtil.resetCounters();
+  }
+  timer = setInterval(async () => {
+    if (isElectron) {
+      let stats = await window
+        .require("electron")
+        .ipcRenderer.invoke("cloud-stats", config);
+      if (stats.total > 0) {
+        toast.loading(
+          i18n.t("Start Transferring Data") +
+            " (" +
+            stats.completed +
+            "/" +
+            stats.total +
+            ")" +
+            " (" +
+            i18n.t(
+              driveList.find(
+                (item) =>
+                  item.value === ConfigService.getItem("defaultSyncOption")
+              )?.label || ""
+            ) +
+            ")",
+          {
+            id: "syncing",
+            position: "bottom-center",
+          }
+        );
+      }
+    } else {
+      let syncUtil = await SyncService.getSyncUtil();
+      let stats = await syncUtil.getStats();
+      if (stats.total > 0) {
+        toast.loading(
+          i18n.t("Start Transferring Data") +
+            " (" +
+            stats.completed +
+            "/" +
+            stats.total +
+            ")" +
+            " (" +
+            i18n.t(
+              driveList.find(
+                (item) =>
+                  item.value === ConfigService.getItem("defaultSyncOption")
+              )?.label || ""
+            ) +
+            ")",
+          {
+            id: "syncing",
+            position: "bottom-center",
+          }
+        );
+      }
+    }
+  }, 1000);
+  return timer;
+};
+export const getTaskStats = async () => {
+  let service = ConfigService.getItem("defaultSyncOption");
+  if (!service) {
+    toast(i18n.t("Please add data source in the setting"));
+    return {};
+  }
+  if (isElectron) {
+    let tokenConfig = await getCloudConfig(service);
+    let config = {
+      ...tokenConfig,
+      service: service,
+      storagePath: getStorageLocation(),
+    };
+    return await window
+      .require("electron")
+      .ipcRenderer.invoke("cloud-stats", config);
+  } else {
+    let syncUtil = await SyncService.getSyncUtil();
+    return await syncUtil.getStats();
+  }
+};
+export const compareVersions = (version1: string, version2: string) => {
+  // Split strings by '.' and convert segments to numbers
+  const parts1 = version1.split(".").map(Number);
+  const parts2 = version2.split(".").map(Number);
+
+  // Determine the maximum length to handle unequal segment counts
+  const maxLength = Math.max(parts1.length, parts2.length);
+
+  for (let i = 0; i < maxLength; i++) {
+    // Use 0 for missing segments in shorter versions
+    const part1 = parts1[i] || 0;
+    const part2 = parts2[i] || 0;
+
+    if (part1 > part2) {
+      return 1; // version1 is greater
+    }
+    if (part1 < part2) {
+      return -1; // version2 is greater
+    }
+  }
+
+  return 0; // Versions are equal
+};
+export const clearAllData = async () => {
+  localStorage.clear();
+  sessionStorage.clear();
+  //clear all indexed db data
+
+  if (isElectron) {
+    let storageLocation = getStorageLocation();
+    const fs = window.require("fs");
+    let databaseList = CommonTool.databaseList;
+    for (let i = 0; i < databaseList.length; i++) {
+      await window.require("electron").ipcRenderer.invoke("close-database", {
+        dbName: databaseList[i],
+        storagePath: getStorageLocation(),
+      });
+    }
+    if (fs.existsSync(storageLocation)) {
+      fs.rmSync(storageLocation, { recursive: true, force: true });
+    }
+    const { ipcRenderer } = window.require("electron");
+    ipcRenderer.invoke("clear-all-data", {});
+  }
+  await localforage.clear();
+};
+export const resetKoodoSync = async () => {
+  let encryptToken = await TokenService.getToken(
+    ConfigService.getItem("defaultSyncOption") + "_token"
+  );
+  await updateUserConfig({
+    is_enable_koodo_sync: "no",
+    default_sync_option: ConfigService.getItem("defaultSyncOption"),
+    default_sync_token: encryptToken || "",
+  });
+  setTimeout(() => {
+    updateUserConfig({
+      is_enable_koodo_sync: "yes",
+      default_sync_option: ConfigService.getItem("defaultSyncOption"),
+      default_sync_token: encryptToken || "",
+    });
+  }, 1000);
+};
+export const handleAutoCloudSync = async () => {
+  let syncRes = await getCloudSyncToken();
+  if (
+    syncRes.code === 200 &&
+    syncRes.data.default_sync_option &&
+    syncRes.data.default_sync_option !== "icloud" &&
+    syncRes.data.default_sync_token
+  ) {
+    let supportedSources = driveList
+      .filter((item) => {
+        if (isElectron) {
+          return item.support.includes("desktop");
+        } else {
+          return item.support.includes("browser");
+        }
+      })
+      .map((item) => item.value);
+    if (!supportedSources.includes(syncRes.data.default_sync_option)) {
+      return false;
+    }
+    if (
+      !isElectron &&
+      (syncRes.data.default_sync_option === "webdav" ||
+        syncRes.data.default_sync_option === "s3compatible")
+    ) {
+      return false;
+    }
+    ConfigService.setItem(
+      "defaultSyncOption",
+      syncRes.data.default_sync_option
+    );
+    ConfigService.setReaderConfig("isEnableKoodoSync", "yes");
+    await TokenService.setToken(
+      syncRes.data.default_sync_option + "_token",
+      syncRes.data.default_sync_token
+    );
+    ConfigService.setListConfig(
+      syncRes.data.default_sync_option,
+      "dataSourceList"
+    );
+    return true;
+  }
+  return false;
+};
+const isCJKText = (text: string): boolean => {
+  // Check if the majority of characters are CJK (Chinese, Japanese, Korean)
+  const cjkPattern = /[\u3000-\u9fff\uac00-\ud7af\uf900-\ufaff]/g;
+  const cjkCount = (text.match(cjkPattern) || []).length;
+  return cjkCount / text.length > 0.3;
+};
+
+export const splitSentences = (text: string, maxLength?: number) => {
+  const resolvedMaxLength = maxLength ?? (isCJKText(text) ? 50 : 150);
+  const segmenter = new (Intl as any).Segmenter("zh", {
+    granularity: "sentence",
+  });
+  const segments = segmenter.segment(text);
+
+  const sentences = Array.from(segments).map((s: any) => s.segment);
+  const trimmed = sentences
+    .map((sentence) => sentence.trim())
+    .filter((sentence) => sentence.trim() !== "");
+
+  const splitLongSentence = (sentence: string): string[] => {
+    if (sentence.length <= resolvedMaxLength) return [sentence];
+
+    // Try splitting by common punctuation marks (Chinese and Western)
+    const parts = sentence
+      .split(/(?<=[,，;；:：、。！？…\.!\?])/)
+      .map((s) => s.trim())
+      .filter((s) => s.length > 0);
+
+    if (parts.length > 1) {
+      // Greedily merge parts to minimize the number of resulting chunks
+      const result: string[] = [];
+      let current = "";
+      for (const part of parts) {
+        const candidate = current ? current + part : part;
+        if (candidate.length <= resolvedMaxLength) {
+          current = candidate;
+        } else {
+          if (current) result.push(current);
+          // If a single part already exceeds maxLength, keep it as-is
+          current = part;
+        }
+      }
+      if (current) result.push(current);
+      return result;
+    }
+
+    // No punctuation found, keep the sentence as-is
+    return [sentence];
+  };
+
+  return trimmed
+    .flatMap(splitLongSentence)
+    .filter((sentence) => /[\p{L}\p{N}]/u.test(sentence));
+};
+export const getICloudDrivePath = () => {
+  if (!isElectron) return "";
+  const fs = window.require("fs");
+  const path = window.require("path");
+  const os = window.require("os");
+
+  let iCloudPath = "";
+
+  // 自动检测iCloud Drive路径
+  if (isElectron && process.platform === "darwin") {
+    // macOS
+    const possiblePath = path.join(
+      os.homedir(),
+      "Library",
+      "Mobile Documents",
+      "iCloud~com~koodoreader~expo",
+      "Documents"
+    );
+    if (fs.existsSync(possiblePath)) {
+      iCloudPath = possiblePath;
+    }
+  }
+
+  // 如果自动检测失败，弹窗让用户手动选择
+  if (!iCloudPath || !fs.existsSync(iCloudPath)) {
+    return "";
+  }
+
+  // 验证路径是否有效
+  if (iCloudPath && fs.existsSync(iCloudPath)) {
+    return iCloudPath;
+  }
+  return "";
+};
+export const prepareThirdConfig = async (service: string, config: any) => {
+  if (
+    service === "adrive" ||
+    service === "boxnet" ||
+    service === "dropbox" ||
+    service === "dubox" ||
+    service === "google" ||
+    service === "microsoft" ||
+    service === "microsoft_exp" ||
+    service === "google_exp" ||
+    service === "yandex" ||
+    service === "yiyiwu"
+  ) {
+    if (
+      config.access_token &&
+      config.expires_at > new Date().getTime() + 15 * 60 * 1000
+    ) {
+      return config;
+    }
+
+    // Get access token
+    let refreshToken = config.refresh_token;
+    let res = await refreshThirdToken(service, refreshToken);
+    if (!res.data || !res.data.access_token) {
+      toast.error(
+        i18n.t(
+          "The authentication token for your data source is no longer valid, please reauthorize in the settings"
+        ),
+        {
+          id: "syncing",
+          duration: 6000,
+        }
+      );
+      let targetDrive = service;
+      await TokenService.setToken(targetDrive + "_token", "");
+      SyncService.removeSyncUtil(targetDrive);
+      removeCloudConfig(targetDrive);
+      if (isElectron) {
+        const { ipcRenderer } = window.require("electron");
+        await ipcRenderer.invoke("cloud-close", {
+          service: targetDrive,
+        });
+      }
+      ConfigService.deleteListConfig(targetDrive, "dataSourceList");
+      if (targetDrive === ConfigService.getItem("defaultSyncOption")) {
+        ConfigService.removeItem("defaultSyncOption");
+      }
+      reloadManager();
+      return {};
+    }
+    if (
+      service === "adrive" ||
+      service === "boxnet" ||
+      service === "dubox" ||
+      service === "yiyiwu"
+    ) {
+      config.refresh_token = res.data.refresh_token;
+      config.access_token = res.data.access_token;
+      config.expires_at = new Date().getTime() + res.data.expires_in * 1000;
+    } else {
+      config.access_token = res.data.access_token;
+      config.expires_at = new Date().getTime() + res.data.expires_in * 1000;
+    }
+    let response: any = await encryptToken(service, config);
+    if (response.code === 200) {
+      if (
+        ConfigService.getReaderConfig("isEnableKoodoSync") === "yes" &&
+        ConfigService.getItem("defaultSyncOption") === service
+      ) {
+        let syncToken = await TokenService.getToken(service + "_token");
+        await updateUserConfig({
+          is_enable_koodo_sync: "yes",
+          default_sync_option: service,
+          default_sync_token: syncToken || "",
+        });
+      }
+    }
+    SyncService.removeSyncUtil(service);
+    removeCloudConfig(service);
+    if (isElectron) {
+      const { ipcRenderer } = window.require("electron");
+      await ipcRenderer.invoke("cloud-close", {
+        service: service,
+      });
+    }
+
+    return config;
+  } else {
+    return config;
+  }
+};
+export const isTokenExpired = async (service: string): Promise<boolean> => {
+  let config = await getCloudToken(service);
+  if (!config) {
+    return false;
+  }
+
+  if (
+    service === "adrive" ||
+    service === "boxnet" ||
+    service === "dropbox" ||
+    service === "dubox" ||
+    service === "google" ||
+    service === "microsoft" ||
+    service === "microsoft_exp" ||
+    service === "google_exp" ||
+    service === "yandex" ||
+    service === "yiyiwu"
+  ) {
+    if (
+      config.access_token &&
+      config.expires_at > new Date().getTime() + 15 * 60 * 1000
+    ) {
+      return false;
+    }
+    return true;
+  } else {
+    return false;
+  }
+};

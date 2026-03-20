@@ -1,0 +1,223 @@
+import i18n from "../i18n";
+
+export const dropdownList = [
+  {
+    title: "Default font family",
+    value: "fontFamily",
+    option: [
+      { label: "Built-in font", value: "Built-in font" },
+      {
+        label: "Load local fonts",
+        value: "Load local fonts",
+      },
+    ],
+    isPDF: false,
+  },
+  {
+    title: "CJK font family",
+    value: "subFontFamily",
+    option: [
+      { label: "Built-in font", value: "Built-in font" },
+      {
+        label: "Load local fonts",
+        value: "Load local fonts",
+      },
+    ],
+    isPDF: false,
+  },
+  {
+    title: "Line height",
+    value: "lineHeight",
+    option: [
+      { label: "Default", value: "" },
+      { label: "1", value: "1" },
+      { label: "1.25", value: "1.25" },
+      { label: "1.5", value: "1.5" },
+      { label: "1.75", value: "1.75" },
+      { label: "2", value: "2" },
+    ],
+    isPDF: false,
+  },
+  {
+    title: "Text alignment",
+    value: "textAlign",
+    option: [
+      { label: "Default", value: "" },
+      { label: "Left", value: "Left" },
+      { label: "Justify", value: "Justify" },
+      { label: "Right", value: "Right" },
+    ],
+    isPDF: false,
+  },
+  {
+    title: "Conversion of Chinese",
+    value: "convertChinese",
+    option: [
+      { label: "Default", value: "" },
+      {
+        label: "Simplified To Traditional",
+        value: "Simplified To Traditional",
+      },
+      {
+        label: "Traditional To Simplified",
+        value: "Traditional To Simplified",
+      },
+    ],
+    isPDF: false,
+  },
+];
+export const sliderConfigs = [
+  {
+    maxValue: 40,
+    minValue: 13,
+    mode: "fontSize",
+    minLabel: "13",
+    maxLabel: "40",
+    step: 1,
+    title: "Font size",
+    isPDF: false,
+  },
+  {
+    maxValue: 80,
+    minValue: -40,
+    mode: "margin",
+    minLabel: "-40",
+    maxLabel: "80",
+    step: 5,
+    title: "Margin",
+    isPDF: true,
+  },
+  {
+    maxValue: 20,
+    minValue: 0,
+    mode: "letterSpacing",
+    minLabel: "0",
+    maxLabel: "20",
+    step: 1,
+    title: "Letter spacing",
+    isPDF: false,
+  },
+  {
+    maxValue: 120,
+    minValue: 0,
+    mode: "paraSpacing",
+    minLabel: "0",
+    maxLabel: "120",
+    step: 1,
+    title: "Paragraph spacing",
+    isPDF: false,
+  },
+  {
+    maxValue: 3,
+    minValue: 0.5,
+    mode: "scale",
+    minLabel: "0.5",
+    maxLabel: "3",
+    step: 0.1,
+    title: "Page width",
+    isPDF: true,
+  },
+  {
+    maxValue: 1,
+    minValue: 0.3,
+    mode: "brightness",
+    minLabel: "0.3",
+    maxLabel: "1",
+    step: 0.1,
+    title: "Brightness",
+    isPDF: true,
+  },
+];
+export const speedList = {
+  id: 3,
+  title: "Speed",
+  value: "speed",
+  option: [
+    { label: "0.1", value: "0.1" },
+    { label: "0.2", value: "0.2" },
+    { label: "0.3", value: "0.3" },
+    { label: "0.4", value: "0.4" },
+    { label: "0.5", value: "0.5" },
+    { label: "0.75", value: "0.75" },
+    { label: "1", value: "1" },
+    { label: "1.25", value: "1.25" },
+    { label: "1.5", value: "1.5" },
+    { label: "1.75", value: "1.75" },
+    { label: "2", value: "2" },
+    { label: "3", value: "3" },
+    { label: "4", value: "4" },
+    { label: "5", value: "5" },
+    { label: "6", value: "6" },
+    { label: "7", value: "7" },
+    { label: "8", value: "8" },
+  ],
+};
+export const ocrTesseractLangList = [
+  { label: "Simplified Chinese", value: "chi_sim", lang: "zhCN" },
+  { label: "Traditional Chinese", value: "chi_tra", lang: "zhTW" },
+  { label: "English", value: "eng", lang: "en" },
+  { label: "Japanese", value: "jpn", lang: "ja" },
+  { label: "Korean", value: "kor", lang: "ko" },
+  { label: "French", value: "fra", lang: "fr" },
+  { label: "German", value: "deu", lang: "de" },
+  { label: "Spanish", value: "spa", lang: "es" },
+  { label: "Russian", value: "rus", lang: "ru" },
+  { label: "Italian", value: "ita", lang: "it" },
+  { label: "Portuguese", value: "por", lang: "pt" },
+];
+export const getOcrPaddleLangList = () => [
+  {
+    label: `${i18n.t("General")} (${i18n.t("Chinese")},${i18n.t("English")},${i18n.t("Japanese")})`,
+    value: "standard_v5_mobile",
+    lang: "standard_v5_mobile",
+  },
+  {
+    label: `${i18n.t("Chinese")} (${i18n.t("More accurate")})`,
+    value: "fast_ch",
+    lang: "fast_ch",
+  },
+  {
+    label: `${i18n.t("English")} (${i18n.t("More accurate")})`,
+    value: "en",
+    lang: "en",
+  },
+  {
+    label: `${i18n.t("Traditional Chinese")} (${i18n.t("More accurate")})`,
+    value: "chinese_cht",
+    lang: "chinese_cht",
+  },
+  {
+    label: `${i18n.t("Japanese")} (${i18n.t("More accurate")})`,
+    value: "japan",
+    lang: "japan",
+  },
+  {
+    label: i18n.t("Korean"),
+    value: "korean",
+    lang: "korean",
+  },
+];
+export const paraSpacingList = [
+  { label: "1", value: "1" },
+  { label: "1.1", value: "1.1" },
+  { label: "1.2", value: "1.2" },
+  { label: "1.3", value: "1.3" },
+  { label: "1.4", value: "1.4" },
+  { label: "1.5", value: "1.5" },
+  { label: "2", value: "2" },
+  { label: "3", value: "3" },
+  { label: "4", value: "4" },
+  { label: "5", value: "5" },
+];
+export const titleSizeList = [
+  { label: "1", value: "1" },
+  { label: "1.1", value: "1.1" },
+  { label: "1.2", value: "1.2" },
+  { label: "1.3", value: "1.3" },
+  { label: "1.4", value: "1.4" },
+  { label: "1.5", value: "1.5" },
+  { label: "2", value: "2" },
+  { label: "3", value: "3" },
+  { label: "4", value: "4" },
+  { label: "5", value: "5" },
+];

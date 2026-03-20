@@ -43,6 +43,7 @@ const initState = {
     ConfigService.getReaderConfig("isHideScaleButton") === "yes",
   isHidePDFConvertButton:
     ConfigService.getReaderConfig("isHidePDFConvertButton") === "yes",
+  isAIPanelOpen: false,
 };
 export function reader(
   state = initState,
@@ -179,6 +180,11 @@ export function reader(
       return {
         ...state,
         margin: action.payload,
+      };
+    case "HANDLE_AI_PANEL_OPEN":
+      return {
+        ...state,
+        isAIPanelOpen: action.payload,
       };
     default:
       return state;

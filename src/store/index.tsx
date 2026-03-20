@@ -112,6 +112,7 @@ export type stateType = {
     currentChapterIndex: number;
     originalText: string;
     htmlBook: HtmlBookModel;
+    isAIPanelOpen: boolean;
   };
   sidebar: {
     mode: string;

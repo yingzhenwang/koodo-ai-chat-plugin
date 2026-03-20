@@ -151,6 +151,15 @@
   transition: transform 0.5s ease;
   z-index: 15;
 }
+.ai-panel-container {
+  width: 349px;
+  height: 100vh;
+  position: absolute;
+  top: 0px;
+  right: 0px;
+  transition: transform 0.5s ease;
+  z-index: 16;
+}
 .navigation-panel-container {
   width: 299px;
   height: 100vh;

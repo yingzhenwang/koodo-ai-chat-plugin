@@ -85,6 +85,9 @@ export function handleHidePDFConvertButton(isHidePDFConvertButton: boolean) {
     payload: isHidePDFConvertButton,
   };
 }
+export function handleAIPanelOpen(isAIPanelOpen: boolean) {
+  return { type: "HANDLE_AI_PANEL_OPEN", payload: isAIPanelOpen };
+}
 export function handleFetchNotes() {
   return async (
     dispatch: (arg0: { type: string; payload: NoteModel[] }) => void

@@ -17,5 +17,6 @@ export interface PopupOptionProps {
   handleFetchNotes: () => void;
   handleOriginalText: (originalText: string) => void;
   handleChangeDirection: (isChangeDirection: boolean) => void;
+  handleAIPanelOpen: (isOpen: boolean) => void;
   t: (title: string) => string;
 }

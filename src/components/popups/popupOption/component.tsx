@@ -220,6 +220,12 @@ class PopupOption extends React.Component<PopupOptionProps> {
     this.props.handleOpenMenu(false);
   };
 
+  handleAskAI = () => {
+    this.props.handleOriginalText(getSelection(this.props.currentBook.format));
+    this.props.handleAIPanelOpen(true);
+    this.props.handleOpenMenu(false);
+  };
+
   handleSpeak = () => {
     var msg = new SpeechSynthesisUtterance();
     msg.text = getSelection(this.props.currentBook.format);
@@ -267,6 +273,9 @@ class PopupOption extends React.Component<PopupOptionProps> {
                         break;
                       case 7:
                         this.handleSpeak();
+                        break;
+                      case 8:
+                        this.handleAskAI();
                         break;
                       default:
                         break;

@@ -8,6 +8,7 @@ import {
   handleFetchNotes,
   handleOriginalText,
   handleNoteKey,
+  handleAIPanelOpen,
 } from "../../../store/actions";
 import { stateType } from "../../../store";
 import { withTranslation } from "react-i18next";
@@ -28,6 +29,7 @@ const actionCreator = {
   handleOriginalText,
   handleChangeDirection,
   handleNoteKey,
+  handleAIPanelOpen,
 };
 export default connect(
   mapStateToProps,

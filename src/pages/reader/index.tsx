@@ -11,6 +11,7 @@ import {
   handleConvertDialog,
   handleScale,
   handleFetchAuthed,
+  handleAIPanelOpen,
 } from "../../store/actions";
 import { connect } from "react-redux";
 import { stateType } from "../../store";
@@ -35,6 +36,7 @@ const mapStateToProps = (state: stateType) => {
     isHideAIButton: state.reader.isHideAIButton,
     isHidePDFConvertButton: state.reader.isHidePDFConvertButton,
     isHideScaleButton: state.reader.isHideScaleButton,
+    isAIPanelOpen: state.reader.isAIPanelOpen,
   };
 };
 const actionCreator = {
@@ -50,6 +52,7 @@ const actionCreator = {
   handleConvertDialog,
   handleScale,
   handleFetchAuthed,
+  handleAIPanelOpen,
 };
 export default connect(
   mapStateToProps,

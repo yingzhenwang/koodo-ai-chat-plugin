@@ -12,6 +12,7 @@ import "./index.css";
 import Book from "../../models/Book";
 import DatabaseService from "../../utils/storage/databaseService";
 import ConvertDialog from "../../components/dialogs/convertDialog";
+import AiAssistant from "../../components/aiAssistant";
 import { isElectron } from "react-device-detect";
 
 let lock = false; //prevent from clicking too fasts
@@ -194,6 +195,7 @@ class Reader extends React.Component<ReaderProps, ReaderState> {
               }}
               style={{
                 left: this.props.isNavLocked ? 315 : 15,
+                transition: "right 0.5s ease",
               }}
             >
               <span className="icon-dropdown previous-chapter-single"></span>
@@ -208,29 +210,33 @@ class Reader extends React.Component<ReaderProps, ReaderState> {
                 setTimeout(() => (lock = false), throttleTime);
               }}
               style={{
-                right: this.props.isSettingLocked ? 315 : 15,
+                right: this.props.isAIPanelOpen
+                  ? 365
+                  : this.props.isSettingLocked
+                    ? 315
+                    : 15,
+                transition: "right 0.5s ease",
               }}
             >
               <span className="icon-dropdown next-chapter-single"></span>
             </div>
-            {this.props.isAuthed &&
-              !this.props.isHideAIButton &&
+            {!this.props.isHideAIButton &&
               ConfigService.getReaderConfig("isDisableAI") !== "yes" && (
                 <div
                   className="next-chapter-single-container"
-                  onClick={async () => {
-                    this.props.handleMenuMode("assistant");
-                    this.props.handleOriginalText(
-                      await this.props.htmlBook.rendition.chapterText()
-                    );
-                    this.props.handleOpenMenu(true);
+                  onClick={() => {
+                    this.props.handleAIPanelOpen(true);
                   }}
                   style={{
                     bottom: "55px",
                     transform: "rotate(0deg)",
                     fontWeight: "bold",
                     fontSize: "17px",
-                    right: this.props.isSettingLocked ? 315 : 15,
+                    right: this.props.isAIPanelOpen
+                      ? 365
+                      : this.props.isSettingLocked
+                        ? 315
+                        : 15,
                   }}
                 >
                   AI
@@ -551,6 +557,18 @@ class Reader extends React.Component<ReaderProps, ReaderState> {
           }
         >
           <SettingPanel />
+        </div>
+        <div
+          className="ai-panel-container"
+          style={
+            this.props.isAIPanelOpen
+              ? {}
+              : {
+                  transform: "translateX(359px)",
+                }
+          }
+        >
+          <AiAssistant />
         </div>
         <div
           className="navigation-panel-container"

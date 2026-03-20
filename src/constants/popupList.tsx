@@ -7,4 +7,5 @@ export const popupList = [
   { name: "dict", title: "Dictionary", icon: "dict" },
   { name: "browser", title: "Search on the Internet", icon: "browser" },
   { name: "speaker", title: "Speak the text", icon: "speaker" },
+  { name: "ai-assist", title: "Ask AI", icon: "ai-assist" },
 ];

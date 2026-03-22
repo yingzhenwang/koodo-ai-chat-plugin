@@ -37,8 +37,19 @@ class AiAssistant extends React.Component<
 
   constructor(props: AiAssistantProps) {
     super(props);
+    let savedMessages: { role: "user" | "assistant"; content: string }[] = [];
+    if (props.currentBook?.key) {
+      const stored = ConfigService.getObjectConfig(
+        props.currentBook.key,
+        "aiChatHistory",
+        []
+      );
+      if (Array.isArray(stored)) {
+        savedMessages = stored;
+      }
+    }
     this.state = {
-      messages: [],
+      messages: savedMessages,
       inputValue: "",
       isStreaming: false,
       streamingText: "",
@@ -48,6 +59,7 @@ class AiAssistant extends React.Component<
         ConfigService.getReaderConfig("aiService") ||
         "openai-chat-plugin",
       isSelectionCollapsed: true,
+      copiedIndex: null,
     };
     this.messagesEndRef = React.createRef();
   }
@@ -59,12 +71,26 @@ class AiAssistant extends React.Component<
     }
   }
 
-  componentDidUpdate(prevProps: AiAssistantProps) {
+  componentDidUpdate(
+    prevProps: AiAssistantProps,
+    prevState: AiAssistantState
+  ) {
     if (
       prevProps.originalText !== this.props.originalText &&
       this.props.originalText
     ) {
       this.updateSelectedText(this.props.originalText);
+    }
+    // Persist messages when they change
+    if (
+      prevState.messages !== this.state.messages &&
+      this.props.currentBook?.key
+    ) {
+      ConfigService.setObjectConfig(
+        this.props.currentBook.key,
+        this.state.messages,
+        "aiChatHistory"
+      );
     }
   }
 
@@ -193,12 +219,12 @@ class AiAssistant extends React.Component<
           fullText += text;
           this.setState({ streamingText: fullText }, this.scrollToBottom);
         },
-        onDone: (_finalText: string) => {
+        onDone: (finalText: string) => {
           this.setState(
             (prev) => ({
               messages: [
                 ...prev.messages,
-                { role: "assistant" as const, content: fullText },
+                { role: "assistant" as const, content: finalText },
               ],
               isStreaming: false,
               streamingText: "",
@@ -256,6 +282,28 @@ class AiAssistant extends React.Component<
       streamingText: "",
       isStreaming: false,
     });
+  };
+
+  handleCopy = async (content: string, index: number) => {
+    try {
+      await navigator.clipboard.writeText(content);
+    } catch {
+      // fallback for non-secure contexts
+      const ta = document.createElement("textarea");
+      ta.value = content;
+      ta.style.position = "fixed";
+      ta.style.opacity = "0";
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand("copy");
+      document.body.removeChild(ta);
+    }
+    this.setState({ copiedIndex: index });
+    setTimeout(() => {
+      this.setState((prev) =>
+        prev.copiedIndex === index ? { copiedIndex: null } : null
+      );
+    }, 2000);
   };
 
   handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -446,6 +494,20 @@ class AiAssistant extends React.Component<
                   {msg.role === "assistant"
                     ? this.renderMarkdown(msg.content)
                     : msg.content}
+                  {msg.role === "assistant" && (
+                    <div className="ai-assistant-msg-actions">
+                      <span
+                        className={`ai-assistant-copy-btn ${
+                          this.state.copiedIndex === i ? "copied" : ""
+                        }`}
+                        onClick={() => this.handleCopy(msg.content, i)}
+                      >
+                        {this.state.copiedIndex === i
+                          ? this.props.t("Copied")
+                          : this.props.t("Copy")}
+                      </span>
+                    </div>
+                  )}
                 </div>
               ))}
               {this.state.isStreaming && (

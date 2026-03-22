@@ -27,4 +27,5 @@ export interface AiAssistantState {
   surroundingText: string;
   aiService: string;
   isSelectionCollapsed: boolean;
+  copiedIndex: number | null;
 }

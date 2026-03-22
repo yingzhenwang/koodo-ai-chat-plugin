@@ -218,6 +218,30 @@
   opacity: 0.85;
 }
 
+/* Message actions (copy button) */
+.ai-assistant-msg-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 4px;
+}
+.ai-assistant-copy-btn {
+  font-size: 12px;
+  opacity: 0.3;
+  cursor: pointer;
+  padding: 2px 8px;
+  border-radius: 4px;
+  transition: all 0.15s;
+  user-select: none;
+}
+.ai-assistant-copy-btn:hover {
+  opacity: 0.8;
+  background: rgba(128, 128, 128, 0.1);
+}
+.ai-assistant-copy-btn.copied {
+  opacity: 0.6;
+  color: #4caf50;
+}
+
 /* Thinking animation */
 .ai-assistant-thinking {
   display: flex;

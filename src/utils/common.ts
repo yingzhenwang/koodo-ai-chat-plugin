@@ -251,7 +251,8 @@ export const getPageWidth = (
   scale: string,
   margin: number,
   isNavLocked: boolean,
-  isSettingLocked: boolean
+  isSettingLocked: boolean,
+  isAIPanelLocked: boolean = false
 ) => {
   if (Math.abs(parseFloat(scale)) > 1.4) {
     scale = "1.3";
@@ -288,11 +289,12 @@ export const getPageWidth = (
       document.body.clientWidth * Math.abs(parseFloat(scale)) -
       document.body.clientWidth * 0.4 -
       (isNavLocked ? 300 : 0) -
-      (isSettingLocked ? 300 : 0);
+      (isSettingLocked ? 300 : 0) -
+      (isAIPanelLocked ? 350 : 0);
     let width = findValidMultiple(preWidth);
     pageOffset = `calc(50vw + ${isNavLocked ? 150 : 0}px - ${
       isSettingLocked ? 150 : 0
-    }px - ${width / 2}px)`;
+    }px - ${isAIPanelLocked ? 175 : 0}px - ${width / 2}px)`;
     pageWidth = width;
   } else if (readerMode === "double") {
     let width = findValidMultiple(
@@ -300,11 +302,12 @@ export const getPageWidth = (
         2 * margin -
         80 -
         (isNavLocked ? 300 : 0) -
-        (isSettingLocked ? 300 : 0)
+        (isSettingLocked ? 300 : 0) -
+        (isAIPanelLocked ? 350 : 0)
     );
     pageOffset = `calc(50vw + ${isNavLocked ? 150 : 0}px - ${
       isSettingLocked ? 150 : 0
-    }px - ${width / 2}px)`;
+    }px - ${isAIPanelLocked ? 175 : 0}px - ${width / 2}px)`;
     pageWidth = width;
   }
   if (pageWidth > document.body.clientWidth) {

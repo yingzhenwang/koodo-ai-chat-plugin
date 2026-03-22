@@ -817,5 +817,7 @@
   "Add AI Assistant": "添加 AI 助手",
   "Custom system prompt, supports {bookTitle} {bookAuthor} {chapterTitle} {selectedText} {surroundingText} variables": "自定义系统提示词，支持 {bookTitle} {bookAuthor} {chapterTitle} {selectedText} {surroundingText} 变量",
   "Translate to English": "翻译成英文",
-  "Translate to Chinese": "翻译成中文"
+  "Translate to Chinese": "翻译成中文",
+  "Reflow reading area": "重排阅读区域",
+  "Unlock reflow": "解除重排"
 }

@@ -9,8 +9,11 @@ export interface AiAssistantProps {
   htmlBook: HtmlBookModel;
   plugins: PluginModel[];
   isAIPanelOpen: boolean;
+  isAIPanelLocked: boolean;
   backgroundColor: string;
+  renderBookFunc: () => void;
   handleAIPanelOpen: (isOpen: boolean) => void;
+  handleAIPanelLock: (isLocked: boolean) => void;
   handleFetchPlugins: () => void;
   t: (title: string) => string;
 }

@@ -79,7 +79,8 @@ class Viewer extends React.Component<ViewerProps, ViewerState> {
         this.props.scale,
         parseInt(this.props.margin),
         this.props.isNavLocked,
-        this.props.isSettingLocked
+        this.props.isSettingLocked,
+        this.props.isAIPanelLocked
       )
     );
     this.props.handleRenderBookFunc(this.handleRenderBook);
@@ -97,7 +98,8 @@ class Viewer extends React.Component<ViewerProps, ViewerState> {
       nextProps.scale !== this.props.scale ||
       nextProps.readerMode !== this.props.readerMode ||
       nextProps.isNavLocked !== this.props.isNavLocked ||
-      nextProps.isSettingLocked !== this.props.isSettingLocked
+      nextProps.isSettingLocked !== this.props.isSettingLocked ||
+      nextProps.isAIPanelLocked !== this.props.isAIPanelLocked
     ) {
       this.setState(
         getPageWidth(
@@ -105,7 +107,8 @@ class Viewer extends React.Component<ViewerProps, ViewerState> {
           nextProps.scale,
           parseInt(nextProps.margin),
           nextProps.isNavLocked,
-          nextProps.isSettingLocked
+          nextProps.isSettingLocked,
+          nextProps.isAIPanelLocked
         )
       );
     }

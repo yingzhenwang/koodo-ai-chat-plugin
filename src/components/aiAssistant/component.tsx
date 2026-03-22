@@ -52,6 +52,13 @@ class AiAssistant extends React.Component<
     this.messagesEndRef = React.createRef();
   }
 
+  componentWillUnmount() {
+    if (this.abortController) {
+      this.abortController.abort();
+      this.abortController = null;
+    }
+  }
+
   componentDidUpdate(prevProps: AiAssistantProps) {
     if (
       prevProps.originalText !== this.props.originalText &&
@@ -99,13 +106,29 @@ class AiAssistant extends React.Component<
     };
   };
 
-  buildContext = (): ReadingContext => {
+  buildContext = async (): Promise<ReadingContext> => {
+    let visibleText = "";
+    if (!this.state.selectedText && this.props.htmlBook?.rendition) {
+      try {
+        const visible = await this.props.htmlBook.rendition.visibleText();
+        const visibleStr = (visible || []).join(" ").trim();
+        if (visibleStr) {
+          const chapterText =
+            await this.props.htmlBook.rendition.chapterText();
+          visibleText = getSurroundingText(chapterText, visibleStr, 1000);
+          if (!visibleText) visibleText = visibleStr;
+        }
+      } catch {
+        // fallback: no visible text context
+      }
+    }
     return {
       bookTitle: this.props.currentBook?.name || "",
       bookAuthor: this.props.currentBook?.author || "",
       chapterTitle: this.props.currentChapter || "",
       selectedText: this.state.selectedText,
       surroundingText: this.state.surroundingText,
+      visibleText,
     };
   };
 
@@ -114,14 +137,14 @@ class AiAssistant extends React.Component<
     this.messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
 
-  handleSend = (text?: string) => {
+  handleSend = async (text?: string) => {
     const input = text || this.state.inputValue.trim();
     if (!input || this.state.isStreaming) return;
 
     const config = this.getPluginConfig();
     if (!config || !config.apiKey) return;
 
-    const context = this.buildContext();
+    const context = await this.buildContext();
     const plugin = (this.props.plugins || []).find(
       (item) => item.key === this.state.aiService
     );
@@ -263,6 +286,14 @@ class AiAssistant extends React.Component<
     ConfigService.setReaderConfig("aiService", key);
   };
 
+  handleToggleLock = () => {
+    const newLocked = !this.props.isAIPanelLocked;
+    this.props.handleAIPanelLock(newLocked);
+    if (this.props.renderBookFunc) {
+      this.props.renderBookFunc();
+    }
+  };
+
   render() {
     const assistantPlugins = (this.props.plugins || []).filter(
       (item) => item.type === "assistant"
@@ -307,8 +338,30 @@ class AiAssistant extends React.Component<
               </select>
             )}
             <span
+              className={
+                this.props.isAIPanelLocked
+                  ? "icon-lock ai-assistant-lock"
+                  : "icon-unlock ai-assistant-lock"
+              }
+              onClick={this.handleToggleLock}
+              data-tooltip-id="my-tooltip"
+              data-tooltip-content={
+                this.props.isAIPanelLocked
+                  ? this.props.t("Unlock reflow")
+                  : this.props.t("Reflow reading area")
+              }
+            ></span>
+            <span
               className="icon-close ai-assistant-close"
-              onClick={() => this.props.handleAIPanelOpen(false)}
+              onClick={() => {
+                this.props.handleAIPanelOpen(false);
+                if (this.props.isAIPanelLocked) {
+                  this.props.handleAIPanelLock(false);
+                  if (this.props.renderBookFunc) {
+                    this.props.renderBookFunc();
+                  }
+                }
+              }}
             ></span>
           </div>
         </div>

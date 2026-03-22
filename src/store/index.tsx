@@ -113,6 +113,7 @@ export type stateType = {
     originalText: string;
     htmlBook: HtmlBookModel;
     isAIPanelOpen: boolean;
+    isAIPanelLocked: boolean;
   };
   sidebar: {
     mode: string;

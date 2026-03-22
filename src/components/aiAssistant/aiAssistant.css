@@ -51,6 +51,15 @@
   color: inherit;
   max-width: 100px;
 }
+.ai-assistant-lock {
+  font-size: 14px;
+  cursor: pointer;
+  opacity: 0.4;
+  padding: 4px;
+}
+.ai-assistant-lock:hover {
+  opacity: 0.8;
+}
 .ai-assistant-close {
   font-size: 14px;
   cursor: pointer;

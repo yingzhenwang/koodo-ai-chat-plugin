@@ -1,6 +1,7 @@
 import { connect } from "react-redux";
 import {
   handleAIPanelOpen,
+  handleAIPanelLock,
   handleFetchPlugins,
 } from "../../store/actions";
 import { stateType } from "../../store";
@@ -15,12 +16,15 @@ const mapStateToProps = (state: stateType) => {
     htmlBook: state.reader.htmlBook,
     plugins: state.manager.plugins,
     isAIPanelOpen: state.reader.isAIPanelOpen,
+    isAIPanelLocked: state.reader.isAIPanelLocked,
     backgroundColor: state.reader.backgroundColor,
+    renderBookFunc: state.book.renderBookFunc,
   };
 };
 
 const actionCreator = {
   handleAIPanelOpen,
+  handleAIPanelLock,
   handleFetchPlugins,
 };
 

@@ -81,6 +81,12 @@ class Reader extends React.Component<ReaderProps, ReaderState> {
       }, 100);
     });
   }
+  UNSAFE_componentWillReceiveProps(nextProps: ReaderProps) {
+    if (nextProps.isAIPanelOpen && !this.props.isAIPanelOpen) {
+      this.setState({ isOpenRightPanel: false });
+    }
+  }
+
   UNSAFE_componentWillMount() {
     let url = document.location.href;
     let firstIndexOfQuestion = url.indexOf("?");
@@ -195,7 +201,6 @@ class Reader extends React.Component<ReaderProps, ReaderState> {
               }}
               style={{
                 left: this.props.isNavLocked ? 315 : 15,
-                transition: "right 0.5s ease",
               }}
             >
               <span className="icon-dropdown previous-chapter-single"></span>

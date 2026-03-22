@@ -44,6 +44,7 @@ const initState = {
   isHidePDFConvertButton:
     ConfigService.getReaderConfig("isHidePDFConvertButton") === "yes",
   isAIPanelOpen: false,
+  isAIPanelLocked: false,
 };
 export function reader(
   state = initState,
@@ -185,6 +186,11 @@ export function reader(
       return {
         ...state,
         isAIPanelOpen: action.payload,
+      };
+    case "HANDLE_AI_PANEL_LOCK":
+      return {
+        ...state,
+        isAIPanelLocked: action.payload,
       };
     default:
       return state;

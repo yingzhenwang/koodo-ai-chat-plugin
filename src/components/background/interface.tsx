@@ -4,6 +4,7 @@ export interface BackgroundProps {
   margin: string;
   isNavLocked: boolean;
   isSettingLocked: boolean;
+  isAIPanelLocked: boolean;
   backgroundColor: string;
 }
 export interface BackgroundState {

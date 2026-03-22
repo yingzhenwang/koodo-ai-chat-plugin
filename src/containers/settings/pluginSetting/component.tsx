@@ -104,6 +104,7 @@ class SettingDialog extends React.Component<
   };
 
   handleTestConnection = async () => {
+    if (this.state.isTesting) return;
     if (!this.state.aiApiKey) {
       toast.error(this.props.t("Please enter API Key"));
       return;
@@ -161,7 +162,7 @@ class SettingDialog extends React.Component<
       script: "",
     };
 
-    if (this.props.plugins.find((item) => item.key === pluginKey)) {
+    if ((this.props.plugins || []).find((item) => item.key === pluginKey)) {
       await DatabaseService.updateRecord(plugin, "plugins");
     } else {
       await DatabaseService.saveRecord(plugin, "plugins");

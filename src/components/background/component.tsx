@@ -21,7 +21,8 @@ class Background extends React.Component<BackgroundProps, BackgroundState> {
         this.props.scale,
         parseInt(this.props.margin),
         this.props.isNavLocked,
-        this.props.isSettingLocked
+        this.props.isSettingLocked,
+        this.props.isAIPanelLocked
       )
     );
   }
@@ -31,7 +32,8 @@ class Background extends React.Component<BackgroundProps, BackgroundState> {
       nextProps.scale !== this.props.scale ||
       nextProps.readerMode !== this.props.readerMode ||
       nextProps.isNavLocked !== this.props.isNavLocked ||
-      nextProps.isSettingLocked !== this.props.isSettingLocked
+      nextProps.isSettingLocked !== this.props.isSettingLocked ||
+      nextProps.isAIPanelLocked !== this.props.isAIPanelLocked
     ) {
       this.setState(
         getPageWidth(
@@ -39,7 +41,8 @@ class Background extends React.Component<BackgroundProps, BackgroundState> {
           nextProps.scale,
           parseInt(nextProps.margin),
           nextProps.isNavLocked,
-          nextProps.isSettingLocked
+          nextProps.isSettingLocked,
+          nextProps.isAIPanelLocked
         )
       );
     }
@@ -63,7 +66,7 @@ class Background extends React.Component<BackgroundProps, BackgroundState> {
                 }
               : {
                   left: this.props.isNavLocked ? 305 : 5,
-                  right: this.props.isSettingLocked ? 305 : 5,
+                  right: (this.props.isAIPanelLocked ? 355 : 0) + (this.props.isSettingLocked ? 305 : 5),
                 }
           }
         ></div>
@@ -79,7 +82,7 @@ class Background extends React.Component<BackgroundProps, BackgroundState> {
                 }
               : {
                   left: this.props.isNavLocked ? 307 : 7,
-                  right: this.props.isSettingLocked ? 307 : 7,
+                  right: (this.props.isAIPanelLocked ? 355 : 0) + (this.props.isSettingLocked ? 307 : 7),
                 }
           }
         >
@@ -133,7 +136,7 @@ class Background extends React.Component<BackgroundProps, BackgroundState> {
                 }
               : {
                   left: this.props.isNavLocked ? 309 : 9,
-                  right: this.props.isSettingLocked ? 309 : 9,
+                  right: (this.props.isAIPanelLocked ? 355 : 0) + (this.props.isSettingLocked ? 309 : 9),
                 }
           }
         ></div>

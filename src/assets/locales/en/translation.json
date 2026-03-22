@@ -809,5 +809,7 @@
   "Add AI Assistant": "Add AI Assistant",
   "Custom system prompt, supports {bookTitle} {bookAuthor} {chapterTitle} {selectedText} {surroundingText} variables": "Custom system prompt, supports {bookTitle} {bookAuthor} {chapterTitle} {selectedText} {surroundingText} variables",
   "Translate to English": "Translate to English",
-  "Translate to Chinese": "Translate to Chinese"
+  "Translate to Chinese": "Translate to Chinese",
+  "Reflow reading area": "Reflow reading area",
+  "Unlock reflow": "Unlock reflow"
 }

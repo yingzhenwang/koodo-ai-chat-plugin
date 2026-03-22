@@ -32,6 +32,7 @@ const mapStateToProps = (state: stateType) => {
     htmlBook: state.reader.htmlBook,
     isNavLocked: state.reader.isNavLocked,
     isSettingLocked: state.reader.isSettingLocked,
+    isAIPanelLocked: state.reader.isAIPanelLocked,
     isOpenMenu: state.viewArea.isOpenMenu,
     isAuthed: state.manager.isAuthed,
     readerMode: state.reader.readerMode,

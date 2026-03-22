@@ -81,6 +81,20 @@ class AiAssistant extends React.Component<
     ) {
       this.updateSelectedText(this.props.originalText);
     }
+    // Load saved messages when currentBook becomes available or changes
+    if (
+      this.props.currentBook?.key &&
+      prevProps.currentBook?.key !== this.props.currentBook.key
+    ) {
+      const stored = ConfigService.getObjectConfig(
+        this.props.currentBook.key,
+        "aiChatHistory",
+        []
+      );
+      if (Array.isArray(stored) && stored.length > 0) {
+        this.setState({ messages: stored });
+      }
+    }
     // Persist messages when they change
     if (
       prevState.messages !== this.state.messages &&

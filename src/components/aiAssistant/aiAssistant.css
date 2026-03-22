@@ -7,6 +7,7 @@
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  background-color: #ffffff;
   animation: fade-right 0.2s ease-in-out 0s 1;
   z-index: 10;
 }

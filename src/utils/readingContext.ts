@@ -14,7 +14,10 @@ export function getSurroundingText(
 ): string {
   if (!chapterText || !anchorText) return "";
 
-  const plainText = chapterText.replace(/<[^>]*>/g, "").replace(/\s+/g, " ");
+  const el = document.createElement("div");
+  el.innerHTML = chapterText;
+  el.querySelectorAll("script, style").forEach((e) => e.remove());
+  const plainText = (el.textContent || "").replace(/\s+/g, " ");
   const cleanAnchor = anchorText.replace(/\s+/g, " ").trim();
 
   const index = plainText.indexOf(cleanAnchor);

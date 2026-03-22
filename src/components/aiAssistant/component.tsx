@@ -277,8 +277,12 @@ class AiAssistant extends React.Component<
   };
 
   renderMarkdown = (content: string) => {
-    const html = marked.parse(content) as string;
-    return Parser(DOMPurify.sanitize(html) || " ");
+    try {
+      const html = marked.parse(content) as string;
+      return Parser(DOMPurify.sanitize(html) || " ");
+    } catch {
+      return content;
+    }
   };
 
   handleChangeAiService = (key: string) => {

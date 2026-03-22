@@ -13,6 +13,7 @@ import Book from "../../models/Book";
 import DatabaseService from "../../utils/storage/databaseService";
 import ConvertDialog from "../../components/dialogs/convertDialog";
 import AiAssistant from "../../components/aiAssistant";
+import ErrorBoundary from "../../components/errorBoundary";
 import { isElectron } from "react-device-detect";
 
 let lock = false; //prevent from clicking too fasts
@@ -573,7 +574,10 @@ class Reader extends React.Component<ReaderProps, ReaderState> {
                 }
           }
         >
-          <AiAssistant />
+          {/* @ts-ignore: React 17/18 type mismatch in @types/react-dom */}
+          <ErrorBoundary>
+            <AiAssistant />
+          </ErrorBoundary>
         </div>
         <div
           className="navigation-panel-container"

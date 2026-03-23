@@ -16,6 +16,7 @@ export interface ReaderProps {
   isHidePDFConvertButton: boolean;
   isHideScaleButton: boolean;
   isAIPanelOpen: boolean;
+  isAIPanelLocked: boolean;
   readerMode: string;
   scale: string;
   handleFetchNotes: () => void;

@@ -37,6 +37,7 @@ const mapStateToProps = (state: stateType) => {
     isHidePDFConvertButton: state.reader.isHidePDFConvertButton,
     isHideScaleButton: state.reader.isHideScaleButton,
     isAIPanelOpen: state.reader.isAIPanelOpen,
+    isAIPanelLocked: state.reader.isAIPanelLocked,
   };
 };
 const actionCreator = {

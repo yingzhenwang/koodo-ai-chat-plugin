@@ -187,7 +187,18 @@ class Reader extends React.Component<ReaderProps, ReaderState> {
         this.state.isOpenRightPanel,
     };
     return (
-      <div className="viewer">
+      <div
+        className="viewer"
+        onMouseDown={(e) => {
+          if (
+            this.props.isAIPanelOpen &&
+            !this.props.isAIPanelLocked &&
+            !(e.target as HTMLElement).closest(".ai-panel-container")
+          ) {
+            this.props.handleAIPanelOpen(false);
+          }
+        }}
+      >
         <Tooltip id="my-tooltip" style={{ zIndex: 25 }} />
         {!this.props.isHidePageButton && (
           <>

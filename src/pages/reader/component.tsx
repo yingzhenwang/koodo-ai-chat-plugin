@@ -85,7 +85,17 @@ class Reader extends React.Component<ReaderProps, ReaderState> {
     this.handleKeyToggleAI = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === "A") {
         e.preventDefault();
-        this.props.handleAIPanelOpen(!this.props.isAIPanelOpen);
+        if (this.props.isAIPanelOpen) {
+          this.props.handleAIPanelOpen(false);
+          if (this.props.isAIPanelLocked) {
+            this.props.handleAIPanelLock(false);
+            if (this.props.renderBookFunc) {
+              this.props.renderBookFunc();
+            }
+          }
+        } else {
+          this.props.handleAIPanelOpen(true);
+        }
       }
     };
     window.addEventListener("keydown", this.handleKeyToggleAI);
@@ -255,7 +265,17 @@ class Reader extends React.Component<ReaderProps, ReaderState> {
                 <div
                   className="next-chapter-single-container"
                   onClick={() => {
-                    this.props.handleAIPanelOpen(!this.props.isAIPanelOpen);
+                    if (this.props.isAIPanelOpen) {
+                      this.props.handleAIPanelOpen(false);
+                      if (this.props.isAIPanelLocked) {
+                        this.props.handleAIPanelLock(false);
+                        if (this.props.renderBookFunc) {
+                          this.props.renderBookFunc();
+                        }
+                      }
+                    } else {
+                      this.props.handleAIPanelOpen(true);
+                    }
                   }}
                   style={{
                     bottom: "55px",

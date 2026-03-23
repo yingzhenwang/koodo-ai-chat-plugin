@@ -33,6 +33,7 @@ export interface ReaderProps {
   renderBookFunc: () => void;
   handleFetchAuthed: () => void;
   handleAIPanelOpen: (isOpen: boolean) => void;
+  handleAIPanelLock: (isLocked: boolean) => void;
 }
 
 export interface ReaderState {

@@ -12,6 +12,7 @@ import {
   handleScale,
   handleFetchAuthed,
   handleAIPanelOpen,
+  handleAIPanelLock,
 } from "../../store/actions";
 import { connect } from "react-redux";
 import { stateType } from "../../store";
@@ -54,6 +55,7 @@ const actionCreator = {
   handleScale,
   handleFetchAuthed,
   handleAIPanelOpen,
+  handleAIPanelLock,
 };
 export default connect(
   mapStateToProps,

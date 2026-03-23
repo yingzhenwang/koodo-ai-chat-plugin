@@ -24,6 +24,7 @@ let isMouseMoving = false;
 class Reader extends React.Component<ReaderProps, ReaderState> {
   messageTimer!: NodeJS.Timeout;
   tickTimer!: NodeJS.Timeout;
+  handleKeyToggleAI: ((e: KeyboardEvent) => void) | null = null;
   constructor(props: ReaderProps) {
     super(props);
     this.state = {
@@ -81,6 +82,18 @@ class Reader extends React.Component<ReaderProps, ReaderState> {
         isMouseMoving = false;
       }, 100);
     });
+    this.handleKeyToggleAI = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === "A") {
+        e.preventDefault();
+        this.props.handleAIPanelOpen(!this.props.isAIPanelOpen);
+      }
+    };
+    window.addEventListener("keydown", this.handleKeyToggleAI);
+  }
+  componentWillUnmount() {
+    if (this.handleKeyToggleAI) {
+      window.removeEventListener("keydown", this.handleKeyToggleAI);
+    }
   }
   UNSAFE_componentWillReceiveProps(nextProps: ReaderProps) {
     if (nextProps.isAIPanelOpen && !this.props.isAIPanelOpen) {
@@ -242,7 +255,7 @@ class Reader extends React.Component<ReaderProps, ReaderState> {
                 <div
                   className="next-chapter-single-container"
                   onClick={() => {
-                    this.props.handleAIPanelOpen(true);
+                    this.props.handleAIPanelOpen(!this.props.isAIPanelOpen);
                   }}
                   style={{
                     bottom: "55px",

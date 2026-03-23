@@ -14,8 +14,10 @@ export interface ViewerProps {
   isAuthed: boolean;
   isNavLocked: boolean;
   isSettingLocked: boolean;
+  isAIPanelOpen: boolean;
   isAIPanelLocked: boolean;
   isHideBackground: boolean;
+  handleAIPanelOpen: (isOpen: boolean) => void;
   defaultSyncOption: string;
   scale: string;
   margin: string;

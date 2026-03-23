@@ -449,6 +449,9 @@ class Viewer extends React.Component<ViewerProps, ViewerState> {
         this.props.handleLeaveReader("right");
         this.props.handleLeaveReader("top");
         this.props.handleLeaveReader("bottom");
+        if (this.props.isAIPanelOpen && !this.props.isAIPanelLocked) {
+          this.props.handleAIPanelOpen(false);
+        }
       });
       doc.addEventListener("mouseup", (event) => {
         if (

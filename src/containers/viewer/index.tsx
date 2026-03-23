@@ -19,6 +19,7 @@ import {
   handleReaderMode,
   handleFetchAuthed,
   handleScale,
+  handleAIPanelOpen,
 } from "../../store/actions";
 import Viewer from "./component";
 import { stateType } from "../../store";
@@ -32,6 +33,7 @@ const mapStateToProps = (state: stateType) => {
     htmlBook: state.reader.htmlBook,
     isNavLocked: state.reader.isNavLocked,
     isSettingLocked: state.reader.isSettingLocked,
+    isAIPanelOpen: state.reader.isAIPanelOpen,
     isAIPanelLocked: state.reader.isAIPanelLocked,
     isOpenMenu: state.viewArea.isOpenMenu,
     isAuthed: state.manager.isAuthed,
@@ -64,6 +66,7 @@ const actionCreator = {
   handleReaderMode,
   handleFetchAuthed,
   handleScale,
+  handleAIPanelOpen,
 };
 export default connect(
   mapStateToProps,
